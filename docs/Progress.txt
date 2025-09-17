@@ -1,0 +1,45 @@
+Phase 1: Data Preprocessing and Graph Construction
+Objective: Transform the raw NYC OpenStreetMap data into a highly efficient, GPU-friendly graph format.
+
+Tools:
+
+Language: C++
+Libraries: Libosmium, CMake
+Input Data: new-york-latest.osm.pbf
+
+Approach & Key Features
+The project uses a two-pass processing pipeline to handle the large-scale dataset efficiently.
+Pass 1: ID Mapping
+Iterated through all road segments (ways with a "highway" tag).
+Mapped 11,726,672 unique 64-bit OSM node IDs to a contiguous 32-bit ID space (0 to ~11.7 million). This compact ID space is crucial for memory efficiency and array indexing.
+
+Pass 2: Graph Construction
+Used the ID map to build the final graph representation.
+Calculated edge weights as the haversine distance (in meters) between consecutive nodes.
+Treated all roads as bidirectional, adding edges in both directions.
+
+Output: Compressed Sparse Row (CSR) Graph
+The final output is a sparse graph stored in the CSR format, which is optimized for GPU parallel processing. This data is saved to a binary file to ensure fast loading in subsequent phases.
+File: nyc_graph.bin
+
+Format: The file contains three contiguous arrays: row_pointers, column_indices, and values.
+
+Final Statistics
+The program successfully processed the entire NYC road network and generated the following statistics.
+
+Nodes: 11,726,672 unique intersections
+Edges: 25,290,318 bidirectional road segments
+Final File Size: 350,390,516 bytes (~350 MB)
+
+Console Log
+Pass 1: Creating node ID map...
+Done. Found 11726672 unique road nodes.
+Pass 2: Building graph data structures...
+Building CSR representation...
+Done. Graph has 25290318 edges.
+Writing graph to nyc_graph.bin...
+Graph successfully saved to nyc_graph.bin
+Summary:
+  Nodes: 11726672
+  Edges: 25290318
+  File size: 350390516 bytes

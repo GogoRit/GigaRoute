@@ -1,0 +1,26 @@
+# C++ and CMake build files
+build/
+*.o
+*.a
+*.so
+*.exe
+cmake-build-*/
+CMakeCache.txt
+CMakeFiles/
+
+# IDE/Editor specific files
+.vscode/
+.idea/
+*.suo
+*.user
+*.pdb
+*.opensdf
+
+# CUDA files
+*.ptx
+*.cubin
+*.fatbin
+
+# Data files (crucial for your project)
+nyc_graph.bin
+Dataset/
