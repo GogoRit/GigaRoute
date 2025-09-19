@@ -9,8 +9,10 @@ find_package(Threads REQUIRED)
 find_package(ZLIB REQUIRED)
 find_package(BZip2 REQUIRED)
 
-# Add your source file
+# Add your source files
 add_executable(graph_converter main.cpp)
+add_executable(dijkstra dijkstra.cpp)
+add_executable(verify_graph verify_graph.cpp)
 
 # Include libosmium headers directly
 target_include_directories(graph_converter PRIVATE 
@@ -26,4 +28,9 @@ target_link_libraries(graph_converter PRIVATE
     BZip2::BZip2
     /opt/homebrew/lib/liblz4.dylib
     /opt/homebrew/opt/expat/lib/libexpat.dylib
+)
+
+# Dijkstra only needs threading support
+target_link_libraries(dijkstra PRIVATE 
+    Threads::Threads
 )
