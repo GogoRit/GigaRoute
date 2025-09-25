@@ -5,14 +5,34 @@
 #include <vector>
 #include <cstdlib>
 #include <ctime>
+#include <fstream>
 
 int main(int argc, char* argv[]) {
     std::cout << "=== CPU Dijkstra's Algorithm Baseline ===" << std::endl;
     
-    // Default graph file path
-    std::string graph_file = "../../data/processed/nyc_graph.bin";
+    // Default graph file path (try multiple possible locations)
+    std::vector<std::string> possible_paths = {
+        "data/processed/nyc_graph.bin",    // New structure
+        "nyc_graph.bin",                   // Project root
+        "../nyc_graph.bin",                // From build directory
+        "../../nyc_graph.bin"              // From build/bin directory
+    };
+    
+    std::string graph_file;
     if (argc > 1) {
         graph_file = argv[1];
+    } else {
+        // Try to find the file in possible locations
+        for (const auto& path : possible_paths) {
+            std::ifstream test_file(path);
+            if (test_file.good()) {
+                graph_file = path;
+                break;
+            }
+        }
+        if (graph_file.empty()) {
+            graph_file = "nyc_graph.bin";  // Default fallback
+        }
     }
     
     // Load graph
