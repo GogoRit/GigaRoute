@@ -71,7 +71,7 @@ public:
         const GPUGraph& gpu_graph = graph_loader->getGPUGraph();
         
         // Initialize distances array
-        launch_init_distances(d_distances, max_nodes, source);
+        launch_init_distances(d_distances, max_nodes, source, 256);
         
         // Initialize first worklist with source node
         CUDA_CHECK(cudaMemcpy(d_worklist_1, &source, sizeof(uint32_t), cudaMemcpyHostToDevice));
@@ -99,7 +99,8 @@ public:
                 next_worklist,
                 current_worklist_size,
                 d_worklist_size,
-                delta
+                delta,
+                256
             );
             
             // Synchronize and get new worklist size
