@@ -21,6 +21,7 @@ CMakeFiles/
 *.cubin
 *.fatbin
 
-# Data files (crucial for your project)
-nyc_graph.bin
-Dataset/
+# Data files (large binary files)
+data/
+*.bin
+*.pbf
