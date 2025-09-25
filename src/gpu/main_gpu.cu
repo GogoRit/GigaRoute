@@ -85,10 +85,25 @@ public:
         uint32_t* next_worklist = d_worklist_2;
         
         int iteration = 0;
-        const int max_iterations = 1000; // Safety limit
+        const int max_iterations = 10000; // Increased safety limit
+        
+        // Check if target is reachable initially
+        float target_distance;
+        CUDA_CHECK(cudaMemcpy(&target_distance, &d_distances[target], 
+                             sizeof(float), cudaMemcpyDeviceToHost));
         
         // Main SSSP loop
         while (current_worklist_size > 0 && iteration < max_iterations) {
+            // Early termination check: if target distance is finite, we found a path
+            if (iteration % 100 == 0 && iteration > 0) {
+                CUDA_CHECK(cudaMemcpy(&target_distance, &d_distances[target], 
+                                     sizeof(float), cudaMemcpyDeviceToHost));
+                if (target_distance < FLT_MAX) {
+                    std::cout << "Target reached at iteration " << iteration 
+                              << " with distance " << target_distance << std::endl;
+                    break;
+                }
+            }
             // Reset next worklist size
             CUDA_CHECK(cudaMemcpy(d_worklist_size, &zero, sizeof(uint32_t), cudaMemcpyHostToDevice));
             
@@ -114,18 +129,31 @@ public:
             
             iteration++;
             
-            if (iteration % 10 == 0) {
+            if (iteration % 100 == 0) {
                 std::cout << "Iteration " << iteration << ", worklist size: " 
-                         << current_worklist_size << std::endl;
+                         << current_worklist_size;
+                if (iteration > 0) {
+                    std::cout << ", target distance: " << target_distance;
+                }
+                std::cout << std::endl;
             }
         }
         
-        std::cout << "SSSP completed in " << iteration << " iterations" << std::endl;
+        if (iteration >= max_iterations) {
+            std::cout << "WARNING: Reached maximum iterations (" << max_iterations 
+                      << ") without full convergence" << std::endl;
+        } else {
+            std::cout << "SSSP completed in " << iteration << " iterations" << std::endl;
+        }
         
-        // Get result distance for target node
+        // Get final result distance for target node
         float result_distance;
         CUDA_CHECK(cudaMemcpy(&result_distance, &d_distances[target], 
                              sizeof(float), cudaMemcpyDeviceToHost));
+        
+        if (result_distance >= FLT_MAX) {
+            std::cout << "No path found to target node " << target << std::endl;
+        }
         
         return result_distance;
     }
