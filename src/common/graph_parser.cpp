@@ -33,8 +33,16 @@ bool GraphParser::loadFromFile(const std::string& filename) {
               (graph.num_nodes + 1) * sizeof(uint32_t));
     file.read(reinterpret_cast<char*>(graph.column_indices.data()), 
               graph.num_edges * sizeof(uint32_t));
-    file.read(reinterpret_cast<char*>(graph.values.data()), 
-              graph.num_edges * sizeof(float));
+    
+    // Handle original double format - read as double then convert to float
+    std::vector<double> temp_values(graph.num_edges);
+    file.read(reinterpret_cast<char*>(temp_values.data()), 
+              graph.num_edges * sizeof(double));
+    
+    // Convert double to float
+    for (size_t i = 0; i < graph.num_edges; i++) {
+        graph.values[i] = static_cast<float>(temp_values[i]);
+    }
 
     file.close();
     is_loaded = true;
