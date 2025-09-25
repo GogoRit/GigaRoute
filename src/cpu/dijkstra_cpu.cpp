@@ -2,6 +2,7 @@
 #include <iostream>
 #include <algorithm>
 #include <iomanip>
+#include <float.h>
 
 DijkstraPathfinder::DijkstraPathfinder(const Graph& g) : graph(g) {
     distances.resize(graph.num_nodes);
@@ -16,7 +17,7 @@ float DijkstraPathfinder::findShortestPath(uint32_t source, uint32_t target) {
     }
     
     // Initialize distances and predecessors
-    std::fill(distances.begin(), distances.end(), std::numeric_limits<float>::infinity());
+    std::fill(distances.begin(), distances.end(), FLT_MAX);
     std::fill(predecessors.begin(), predecessors.end(), UINT32_MAX);
     
     distances[source] = 0.0f;
@@ -68,7 +69,7 @@ float DijkstraPathfinder::findShortestPath(uint32_t source, uint32_t target) {
 std::vector<uint32_t> DijkstraPathfinder::getPath(uint32_t source, uint32_t target) {
     std::vector<uint32_t> path;
     
-    if (distances[target] == std::numeric_limits<float>::infinity()) {
+    if (distances[target] >= FLT_MAX) {
         return path; // No path found
     }
     
@@ -89,7 +90,7 @@ void DijkstraPathfinder::printResult(uint32_t source, uint32_t target, float dis
     std::cout << "Start node: " << source << std::endl;
     std::cout << "End node: " << target << std::endl;
     
-    if (distance == std::numeric_limits<float>::infinity()) {
+    if (distance >= FLT_MAX) {
         std::cout << "Path found: No" << std::endl;
         return;
     }

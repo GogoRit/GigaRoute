@@ -1,6 +1,6 @@
 #include "gpu_graph.h"
 #include <device_launch_parameters.h>
-#include <limits>
+#include <float.h>
 
 // Atomic min function for floats (since CUDA doesn't provide one natively)
 __device__ float atomicMinFloat(float* address, float val) {
@@ -75,7 +75,7 @@ __global__ void init_distances(float* d_distances, uint32_t num_nodes, uint32_t 
         if (tid == source_node) {
             d_distances[tid] = 0.0f;
         } else {
-            d_distances[tid] = std::numeric_limits<float>::infinity();
+            d_distances[tid] = FLT_MAX;  // Use FLT_MAX instead of std::numeric_limits
         }
     }
 }
