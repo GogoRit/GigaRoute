@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <ctime>
 #include <fstream>
+#include <float.h>
 
 // Forward declarations of kernel launch functions
 extern "C" {
