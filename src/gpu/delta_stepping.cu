@@ -223,9 +223,42 @@ float GPUDeltaStepping::findShortestPath(uint32_t source, uint32_t target) {
         current_bucket = findNextNonEmptyBucket();
         iteration++;
         
-        // Progress reporting
+        // Debug first few iterations
+        if (iteration <= 3) {
+            std::cout << "After iteration " << iteration << ", next bucket: " << current_bucket << std::endl;
+            
+            // Check first few neighbor distances
+            if (iteration == 1 && source == 0) {
+                std::vector<float> neighbor_distances(3);
+                uint32_t neighbors[3] = {1, 1110127, 4412508};
+                for (int i = 0; i < 3; i++) {
+                    CUDA_CHECK(cudaMemcpy(&neighbor_distances[i], &d_distances[neighbors[i]], 
+                                         sizeof(float), cudaMemcpyDeviceToHost));
+                    std::cout << "  Neighbor " << neighbors[i] << " distance: " << neighbor_distances[i] << std::endl;
+                }
+            }
+        }
+        
+        // Progress reporting with debugging
         if (iteration % 1000 == 0) {
             std::cout << "Processed bucket " << current_bucket << " (iteration " << iteration << ")" << std::endl;
+            
+            // Debug: Check bucket sizes
+            std::vector<uint32_t> debug_bucket_sizes(std::min(10u, num_buckets));
+            CUDA_CHECK(cudaMemcpy(debug_bucket_sizes.data(), d_bucket_sizes, 
+                                 debug_bucket_sizes.size() * sizeof(uint32_t), cudaMemcpyDeviceToHost));
+            
+            std::cout << "  Bucket sizes [0-9]: ";
+            for (size_t i = 0; i < debug_bucket_sizes.size(); i++) {
+                std::cout << debug_bucket_sizes[i] << " ";
+            }
+            std::cout << std::endl;
+            
+            // Check target distance
+            float debug_target_distance;
+            CUDA_CHECK(cudaMemcpy(&debug_target_distance, &d_distances[target], 
+                                 sizeof(float), cudaMemcpyDeviceToHost));
+            std::cout << "  Target distance: " << debug_target_distance << std::endl;
         }
     }
     
