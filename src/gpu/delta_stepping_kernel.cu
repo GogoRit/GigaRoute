@@ -50,9 +50,8 @@ __global__ void delta_stepping_kernel(
     uint32_t expected_bucket = getBucketIndex(current_distance, delta);
     if (expected_bucket != current_bucket) return;
     
-    // Debug: Count how many nodes we're actually processing (remove this later)
-    // This will help us see if any work is being done
-    atomicAdd(&d_bucket_sizes[current_bucket], 0); // No-op but shows we're here
+    // Mark this node as processed by removing it from its bucket
+    d_buckets[current_node] = UINT32_MAX; // Mark as processed
     
     // Get the range of edges for this node using CSR format
     uint32_t edge_start = d_graph.d_row_pointers[current_node];
@@ -91,10 +90,13 @@ __global__ void bucket_update_kernel(
     
     if (tid >= max_nodes) return;
     
+    // Skip nodes that have been processed (marked as UINT32_MAX)
+    if (d_buckets[tid] == UINT32_MAX) return;
+    
     float distance = d_distances[tid];
     uint32_t new_bucket = getBucketIndex(distance, delta);
     
-    // Update bucket assignment
+    // Update bucket assignment (only for unprocessed nodes)
     d_buckets[tid] = new_bucket;
 }
 
@@ -110,6 +112,7 @@ __global__ void count_bucket_sizes_kernel(
     if (tid >= max_nodes) return;
     
     uint32_t bucket = d_buckets[tid];
+    // Only count unprocessed nodes (processed nodes have bucket = UINT32_MAX)
     if (bucket != UINT32_MAX && bucket < num_buckets) {
         atomicAdd(&d_bucket_sizes[bucket], 1);
     }
