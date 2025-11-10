@@ -1,12 +1,12 @@
 #!/bin/bash
-# Remote GPU Testing Script for University GTX 1080
-# Usage: ./remote_test.sh [username@hostname] [optional-test-case]
+# Remote GPU Testing Script for RIT CS Department
+# Usage: ./remote_test.sh [optional-test-case]
 
 set -e
 
 # Configuration
-REMOTE_HOST="${1:-your_username@gpu_server.university.edu}"
-REMOTE_DIR="/tmp/cuda_project_$(date +%s)"
+REMOTE_HOST="gm8189@umber.cs.rit.edu"
+REMOTE_DIR="~/CUDA_Project"  # Use home directory instead of tmp
 LOCAL_PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # Colors for output
@@ -35,49 +35,60 @@ copy_to_remote() {
     scp -r "$1" "$REMOTE_HOST:$2"
 }
 
-# Step 1: Create remote directory
-echo -e "${YELLOW}Step 1: Setting up remote environment${NC}"
-run_remote "mkdir -p $REMOTE_DIR"
+# Step 1: Ensure we have latest changes committed
+echo -e "${YELLOW}Step 1: Checking local git status${NC}"
+cd "$LOCAL_PROJECT_DIR"
+if ! git diff-index --quiet HEAD --; then
+    echo -e "${RED}Warning: You have uncommitted changes. Committing them first...${NC}"
+    git add -A
+    git commit -m "Auto-commit before remote testing"
+fi
 
-# Step 2: Copy source code (excluding build directories and data)
-echo -e "${YELLOW}Step 2: Copying source code${NC}"
-rsync -av --exclude='build*' --exclude='data/' --exclude='.git/' \
-    "$LOCAL_PROJECT_DIR/" "$REMOTE_HOST:$REMOTE_DIR/"
+# Step 2: Push latest changes to remote
+echo -e "${YELLOW}Step 2: Pushing latest changes to git${NC}"
+git push origin main
 
-# Step 3: Build on remote GPU server
-echo -e "${YELLOW}Step 3: Building on remote GPU server${NC}"
+# Step 3: Setup/update remote repository
+echo -e "${YELLOW}Step 3: Setting up remote repository${NC}"
+run_remote "if [ ! -d $REMOTE_DIR ]; then 
+    git clone https://github.com/GogoRit/GigaRoute.git $REMOTE_DIR
+else 
+    cd $REMOTE_DIR && git pull origin main
+fi"
+
+# Step 4: Build on remote GPU server
+echo -e "${YELLOW}Step 4: Building on remote GPU server${NC}"
 run_remote "cd $REMOTE_DIR && mkdir -p build && cd build && cmake .. && make -j4"
 
-# Step 4: Check CUDA environment
-echo -e "${YELLOW}Step 4: Checking CUDA environment${NC}"
+# Step 5: Check CUDA environment
+echo -e "${YELLOW}Step 5: Checking CUDA environment${NC}"
 run_remote "nvidia-smi"
 run_remote "nvcc --version"
 
-# Step 5: Run tests
-echo -e "${YELLOW}Step 5: Running GPU tests${NC}"
+# Step 6: Run tests
+echo -e "${YELLOW}Step 6: Running GPU tests${NC}"
 
 # Check if data file exists, if not provide instructions
-run_remote "cd $REMOTE_DIR && ls -la data/processed/ || echo 'Data file not found'"
+run_remote "cd $REMOTE_DIR && ls -la data/processed/ || echo 'Data file not found - you may need to upload nyc_graph.bin'"
 
 # Test cases
-if [ -n "$2" ]; then
-    # Custom test case
-    echo "Running custom test case: $2"
-    run_remote "cd $REMOTE_DIR/build && ./bin/gpu_dijkstra $2"
+if [ -n "$1" ]; then
+    # Custom test case from command line argument
+    echo "Running custom test case: $1"
+    run_remote "cd $REMOTE_DIR/build && ./bin/gpu_dijkstra $1"
+    run_remote "cd $REMOTE_DIR/build && ./bin/delta_stepping $1"
 else
     # Default test cases
     echo "Running default test cases..."
+    echo "Testing Work-list SSSP:"
     run_remote "cd $REMOTE_DIR/build && ./bin/gpu_dijkstra || echo 'Note: Requires nyc_graph.bin in data/processed/'"
+    echo "Testing Delta-stepping:"
+    run_remote "cd $REMOTE_DIR/build && ./bin/delta_stepping || echo 'Note: Requires nyc_graph.bin in data/processed/'"
 fi
 
-# Step 6: Copy results back (if any)
-echo -e "${YELLOW}Step 6: Copying results back${NC}"
-mkdir -p "$LOCAL_PROJECT_DIR/results/remote_$(date +%Y%m%d_%H%M%S)"
-scp -r "$REMOTE_HOST:$REMOTE_DIR/build/*.log" "$LOCAL_PROJECT_DIR/results/" 2>/dev/null || echo "No log files to copy"
-
-# Step 7: Cleanup remote directory
-echo -e "${YELLOW}Step 7: Cleaning up remote directory${NC}"
-run_remote "rm -rf $REMOTE_DIR"
+# Step 7: Show build artifacts
+echo -e "${YELLOW}Step 7: Available executables${NC}"
+run_remote "cd $REMOTE_DIR/build && ls -la bin/"
 
 echo -e "${GREEN}Remote testing completed${NC}"
 echo "Results saved to: $LOCAL_PROJECT_DIR/results/"
