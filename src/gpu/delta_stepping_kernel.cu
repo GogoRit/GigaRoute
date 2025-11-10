@@ -123,8 +123,8 @@ __global__ void bucket_update_kernel(
     
     if (tid >= max_nodes) return;
     
-    // Don't update bucket assignments for settled nodes
-    if (d_buckets[tid] >= 1000000) return;
+    // Don't update bucket assignments for settled nodes (but allow UINT32_MAX nodes to be updated)
+    if (d_buckets[tid] >= 1000000 && d_buckets[tid] != UINT32_MAX) return;
     
     float distance = d_distances[tid];
     uint32_t new_bucket = getBucketIndex(distance, delta);
