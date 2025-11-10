@@ -183,7 +183,30 @@ float GPUDeltaStepping::findShortestPath(uint32_t source, uint32_t target) {
             uint32_t updated;
             CUDA_CHECK(cudaMemcpy(&updated, d_updated_flag, sizeof(uint32_t), cudaMemcpyDeviceToHost));
             
-            bucket_updated = (updated != 0);
+            if (updated) {
+                // Update bucket assignments so newly relaxed neighbors can be processed
+                launch_bucket_update_kernel(d_distances, d_buckets, config.delta, max_nodes, 256);
+                CUDA_CHECK(cudaDeviceSynchronize());
+                
+                // Recount to see if new nodes were added to current bucket
+                CUDA_CHECK(cudaMemset(d_bucket_sizes, 0, num_buckets * sizeof(uint32_t)));
+                launch_count_bucket_sizes(d_buckets, d_bucket_sizes, max_nodes, num_buckets, 256);
+                CUDA_CHECK(cudaDeviceSynchronize());
+                
+                // Check if current bucket has more nodes now
+                uint32_t new_bucket_size = 0;
+                if (current_bucket < num_buckets) {
+                    CUDA_CHECK(cudaMemcpy(&new_bucket_size, &d_bucket_sizes[current_bucket], 
+                                         sizeof(uint32_t), cudaMemcpyDeviceToHost));
+                }
+                
+                // If new nodes were added to current bucket, continue processing
+                bucket_updated = (new_bucket_size > nodes_in_bucket || updated != 0);
+                nodes_in_bucket = new_bucket_size;
+            } else {
+                bucket_updated = false;
+            }
+            
             bucket_iterations++;
         }
         
@@ -193,12 +216,14 @@ float GPUDeltaStepping::findShortestPath(uint32_t source, uint32_t target) {
                      << " in " << bucket_iterations << " iterations" << std::endl;
         }
         
-        // Now settle nodes in current bucket (they're still in current_bucket since we didn't update)
-        launch_settle_bucket_kernel(d_buckets, current_bucket, max_nodes, 256);
+        // CRITICAL: Update bucket assignments BEFORE settling
+        // This ensures newly relaxed neighbors get proper bucket assignments
+        launch_bucket_update_kernel(d_distances, d_buckets, config.delta, max_nodes, 256);
         CUDA_CHECK(cudaDeviceSynchronize());
         
-        // Update ALL bucket assignments based on new distances (settled nodes preserved)
-        launch_bucket_update_kernel(d_distances, d_buckets, config.delta, max_nodes, 256);
+        // Now settle nodes that are still in the current bucket
+        // (Some may have moved to other buckets during processing)
+        launch_settle_bucket_kernel(d_buckets, current_bucket, max_nodes, 256);
         CUDA_CHECK(cudaDeviceSynchronize());
         
         // Recount bucket sizes
