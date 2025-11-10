@@ -46,14 +46,14 @@ fi
 
 # Step 2: Push latest changes to remote
 echo -e "${YELLOW}Step 2: Pushing latest changes to git${NC}"
-git push origin main
+git push origin feature/gpu-routing-algorithm
 
 # Step 3: Setup/update remote repository
 echo -e "${YELLOW}Step 3: Setting up remote repository${NC}"
 run_remote "if [ ! -d $REMOTE_DIR ]; then 
-    git clone https://github.com/GogoRit/GigaRoute.git $REMOTE_DIR
+    git clone -b feature/gpu-routing-algorithm https://github.com/GogoRit/GigaRoute.git $REMOTE_DIR
 else 
-    cd $REMOTE_DIR && git pull origin main
+    cd $REMOTE_DIR && git pull origin feature/gpu-routing-algorithm
 fi"
 
 # Step 4: Build on remote GPU server
