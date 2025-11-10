@@ -195,12 +195,18 @@ float GPUDeltaStepping::findShortestPath(uint32_t source, uint32_t target) {
         CUDA_CHECK(cudaDeviceSynchronize());
         
         // Find next non-empty bucket
+        uint32_t old_bucket = current_bucket;
         current_bucket = findNextNonEmptyBucket();
         
         iteration++;
         
-        // Progress reporting with debugging
-        if (iteration % 100 == 0) {
+        // Debug: Show bucket transition
+        if (iteration <= 10) {
+            std::cout << "Iteration " << iteration << ": " << old_bucket << " -> " << current_bucket << std::endl;
+        }
+        
+        // Progress reporting with debugging (show every iteration for debugging)
+        if (iteration % 1 == 0 && iteration < 10) {
             // Get bucket sizes for debugging
             std::vector<uint32_t> debug_bucket_sizes(std::min(10u, num_buckets));
             CUDA_CHECK(cudaMemcpy(debug_bucket_sizes.data(), d_bucket_sizes, 

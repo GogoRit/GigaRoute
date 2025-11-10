@@ -70,10 +70,13 @@ __global__ void delta_stepping_kernel(
         // Try to update neighbor's distance atomically
         float old_distance = atomicMinFloat(&d_distances[neighbor], new_distance);
         
-        // If we successfully improved the distance, mark for bucket update
+        // If we successfully improved the distance, immediately update bucket
         if (new_distance < old_distance) {
-            // The bucket update will happen in a separate kernel pass
-            // This avoids race conditions in bucket size tracking
+            uint32_t new_bucket = getBucketIndex(new_distance, delta);
+            // Only update if the neighbor hasn't been settled yet
+            if (d_buckets[neighbor] < 1000000) {
+                d_buckets[neighbor] = new_bucket;
+            }
         }
     }
 }
