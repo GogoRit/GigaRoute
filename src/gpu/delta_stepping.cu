@@ -76,9 +76,9 @@ void GPUDeltaStepping::freeGPUMemory() {
 }
 
 uint32_t GPUDeltaStepping::calculateOptimalDelta(const GPUGraph& graph) {
-    // Use a reasonable delta based on typical edge weights
+    // Use a smaller delta for debugging - larger deltas might skip nodes
     // For road networks, most edges are 10-500 meters
-    return 100.0f; // 100m buckets - good balance for road networks
+    return 50.0f; // 50m buckets - smaller for better granularity
 }
 
 void GPUDeltaStepping::resetDistances(uint32_t source) {
@@ -135,15 +135,14 @@ float GPUDeltaStepping::findShortestPath(uint32_t source, uint32_t target) {
     // Main delta-stepping loop - process buckets sequentially
     while (current_bucket != UINT32_MAX && iteration < config.max_iterations) {
         
-        // Check for early termination
-        if (iteration % 100 == 0 && iteration > 0) {
-            CUDA_CHECK(cudaMemcpy(&target_distance, &d_distances[target], 
-                                 sizeof(float), cudaMemcpyDeviceToHost));
-            if (target_distance < FLT_MAX) {
-                std::cout << "Target reached at bucket " << current_bucket 
-                         << " with distance " << target_distance << std::endl;
-                break;
-            }
+        // Check for early termination every iteration for debugging
+        CUDA_CHECK(cudaMemcpy(&target_distance, &d_distances[target], 
+                             sizeof(float), cudaMemcpyDeviceToHost));
+        if (target_distance < FLT_MAX) {
+            std::cout << "Target reached at iteration " << iteration 
+                     << ", bucket " << current_bucket 
+                     << " with distance " << target_distance << std::endl;
+            break;
         }
         
         // Simplified: Process ALL edges for nodes in current bucket (no light/heavy split)
@@ -231,11 +230,14 @@ float GPUDeltaStepping::findShortestPath(uint32_t source, uint32_t target) {
             }
             std::cout << std::endl;
             
-            // Check target distance
+            // Check target distance and bucket
             float debug_target_distance;
+            uint32_t debug_target_bucket;
             CUDA_CHECK(cudaMemcpy(&debug_target_distance, &d_distances[target], 
                                  sizeof(float), cudaMemcpyDeviceToHost));
-            std::cout << "  Target distance: " << debug_target_distance << std::endl;
+            CUDA_CHECK(cudaMemcpy(&debug_target_bucket, &d_buckets[target], 
+                                 sizeof(uint32_t), cudaMemcpyDeviceToHost));
+            std::cout << "  Target distance: " << debug_target_distance << ", bucket: " << debug_target_bucket << std::endl;
         }
     }
     
