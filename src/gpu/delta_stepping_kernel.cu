@@ -36,8 +36,9 @@ __global__ void delta_stepping_light_kernel(
     
     if (tid >= max_nodes) return;
     
-    // Only process nodes in the current bucket
-    if (d_buckets[tid] != current_bucket) return;
+    // Only process nodes in the current bucket and not settled
+    uint32_t node_bucket = d_buckets[tid];
+    if (node_bucket != current_bucket || node_bucket >= 1000000) return;
     
     uint32_t current_node = tid;
     float current_distance = d_distances[current_node];
@@ -84,7 +85,8 @@ __global__ void delta_stepping_heavy_kernel(
     if (tid >= max_nodes) return;
     
     // Only process nodes that were in the current bucket (now settled)
-    if (d_buckets[tid] != current_bucket) return;
+    uint32_t node_bucket = d_buckets[tid];
+    if (node_bucket != current_bucket && node_bucket != (1000000 + current_bucket)) return;
     
     uint32_t current_node = tid;
     float current_distance = d_distances[current_node];
@@ -123,6 +125,9 @@ __global__ void bucket_update_kernel(
     
     if (tid >= max_nodes) return;
     
+    // Don't update bucket assignments for settled nodes
+    if (d_buckets[tid] >= 1000000) return;
+    
     float distance = d_distances[tid];
     uint32_t new_bucket = getBucketIndex(distance, delta);
     d_buckets[tid] = new_bucket;
@@ -155,7 +160,7 @@ __global__ void count_bucket_sizes_kernel(
     if (tid >= max_nodes) return;
     
     uint32_t bucket = d_buckets[tid];
-    // Count only unsettled nodes (bucket < 1000000)
+    // Count only unsettled nodes (bucket < 1000000) and valid buckets
     if (bucket != UINT32_MAX && bucket < num_buckets && bucket < 1000000) {
         atomicAdd(&d_bucket_sizes[bucket], 1);
     }
