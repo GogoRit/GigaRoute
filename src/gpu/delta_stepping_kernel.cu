@@ -186,32 +186,6 @@ __global__ void find_next_bucket_kernel(
 // Host function implementations
 extern "C" {
 
-void launch_delta_stepping_kernel(
-    const GPUGraph& gpu_graph,
-    float* d_distances,
-    uint32_t* d_buckets,
-    uint32_t* d_bucket_sizes,
-    uint32_t* d_bucket_offsets,
-    uint32_t current_bucket,
-    float delta,
-    uint32_t max_nodes,
-    int block_size)
-{
-    int num_blocks = (max_nodes + block_size - 1) / block_size;
-    
-    delta_stepping_kernel<<<num_blocks, block_size>>>(
-        gpu_graph,
-        d_distances,
-        d_buckets,
-        d_bucket_sizes,
-        d_bucket_offsets,
-        current_bucket,
-        delta,
-        max_nodes
-    );
-    
-    CUDA_CHECK(cudaGetLastError());
-}
 
 void launch_delta_stepping_light_kernel(
     const GPUGraph& gpu_graph,
