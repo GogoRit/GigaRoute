@@ -76,17 +76,9 @@ void GPUDeltaStepping::freeGPUMemory() {
 }
 
 uint32_t GPUDeltaStepping::calculateOptimalDelta(const GPUGraph& graph) {
-    // For debugging, use a much smaller delta to see if that helps
-    // The issue might be that 200m is too large for the algorithm to work correctly
-    
-    // Try a very small delta first
-    if (graph.num_nodes > 10000000) {
-        return 10.0f; // Much smaller for debugging - 10m buckets
-    } else if (graph.num_nodes > 1000000) {
-        return 5.0f; // Very small buckets
-    } else {
-        return 1.0f;  // Tiny buckets for small graphs
-    }
+    // Use a reasonable delta based on typical edge weights
+    // For road networks, most edges are 10-500 meters
+    return 100.0f; // 100m buckets - good balance for road networks
 }
 
 void GPUDeltaStepping::resetDistances(uint32_t source) {

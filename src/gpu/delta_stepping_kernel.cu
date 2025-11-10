@@ -22,20 +22,22 @@ __device__ uint32_t getBucketIndex(float distance, float delta) {
     return (uint32_t)(distance / delta);
 }
 
-// Delta-stepping kernel: process nodes in current bucket
-__global__ void delta_stepping_kernel(
+// Delta-stepping kernel: process LIGHT edges only (weight <= delta)
+__global__ void delta_stepping_light_kernel(
     const GPUGraph d_graph,
     float* d_distances,
     uint32_t* d_buckets,
-    uint32_t* d_bucket_sizes,
-    uint32_t* d_bucket_offsets,
     uint32_t current_bucket,
     float delta,
-    uint32_t max_nodes)
+    uint32_t max_nodes,
+    uint32_t* d_updated_flag)
 {
     uint32_t tid = threadIdx.x + blockIdx.x * blockDim.x;
     
     if (tid >= max_nodes) return;
+    
+    // Only process nodes in the current bucket
+    if (d_buckets[tid] != current_bucket) return;
     
     uint32_t current_node = tid;
     float current_distance = d_distances[current_node];
@@ -43,69 +45,86 @@ __global__ void delta_stepping_kernel(
     // Skip if this node has infinite distance
     if (current_distance >= FLT_MAX) return;
     
-    // Only process nodes that belong to current bucket based on their stored bucket assignment
-    if (d_buckets[current_node] != current_bucket) return;
-    
-    // Verify the node actually belongs to this bucket (double-check)
-    uint32_t expected_bucket = getBucketIndex(current_distance, delta);
-    if (expected_bucket != current_bucket) return;
-    
-    // After processing this node in this bucket, it should be "settled"
-    // Mark it as processed by setting its bucket to a special "settled" value
-    // Use current_bucket + 1000000 to indicate it was processed in this bucket
-    d_buckets[current_node] = current_bucket + 1000000;
-    
-    // Get the range of edges for this node using CSR format
+    // Get the range of edges for this node
     uint32_t edge_start = d_graph.d_row_pointers[current_node];
     uint32_t edge_end = d_graph.d_row_pointers[current_node + 1];
     
-    // Debug: Count how many edges this node has
-    uint32_t num_edges = edge_end - edge_start;
-    if (current_node == 0 && num_edges > 0) {
-        // Use atomic to signal that node 0 has edges (for debugging)
-        atomicAdd(&d_bucket_sizes[0], 0); // No-op but shows we found edges
-    }
-    
-    // Process all outgoing edges from current_node
+    // Process only LIGHT edges (weight <= delta)
     for (uint32_t edge_idx = edge_start; edge_idx < edge_end; edge_idx++) {
         uint32_t neighbor = d_graph.d_column_indices[edge_idx];
         float edge_weight = d_graph.d_values[edge_idx];
         
-        // Calculate new potential distance to neighbor
-        float new_distance = current_distance + edge_weight;
-        
-        // Try to update neighbor's distance atomically
-        float old_distance = atomicMinFloat(&d_distances[neighbor], new_distance);
-        
-        // Don't update buckets here - let the separate bucket update handle it
-        // This avoids race conditions between distance updates and bucket assignments
+        // CRITICAL: Only process light edges in this kernel
+        if (edge_weight <= delta) {
+            float new_distance = current_distance + edge_weight;
+            
+            // Try to update neighbor's distance atomically
+            float old_distance = atomicMinFloat(&d_distances[neighbor], new_distance);
+            
+            // If we updated the distance, signal that we made changes
+            if (new_distance < old_distance) {
+                atomicExch(d_updated_flag, 1);
+            }
+        }
     }
 }
 
-// Kernel to rebuild bucket assignments and sizes from scratch
+// Kernel to process HEAVY edges (weight > delta) for settled nodes
+__global__ void delta_stepping_heavy_kernel(
+    const GPUGraph d_graph,
+    float* d_distances,
+    uint32_t* d_buckets,
+    uint32_t current_bucket,
+    float delta,
+    uint32_t max_nodes,
+    uint32_t* d_updated_flag)
+{
+    uint32_t tid = threadIdx.x + blockIdx.x * blockDim.x;
+    
+    if (tid >= max_nodes) return;
+    
+    // Only process nodes that were in the current bucket (now settled)
+    if (d_buckets[tid] != current_bucket) return;
+    
+    uint32_t current_node = tid;
+    float current_distance = d_distances[current_node];
+    
+    if (current_distance >= FLT_MAX) return;
+    
+    uint32_t edge_start = d_graph.d_row_pointers[current_node];
+    uint32_t edge_end = d_graph.d_row_pointers[current_node + 1];
+    
+    // Process only HEAVY edges (weight > delta)
+    for (uint32_t edge_idx = edge_start; edge_idx < edge_end; edge_idx++) {
+        uint32_t neighbor = d_graph.d_column_indices[edge_idx];
+        float edge_weight = d_graph.d_values[edge_idx];
+        
+        // CRITICAL: Only process heavy edges in this kernel
+        if (edge_weight > delta) {
+            float new_distance = current_distance + edge_weight;
+            
+            float old_distance = atomicMinFloat(&d_distances[neighbor], new_distance);
+            
+            if (new_distance < old_distance) {
+                atomicExch(d_updated_flag, 1);
+            }
+        }
+    }
+}
+
+// Simple kernel to update all bucket assignments based on current distances
 __global__ void bucket_update_kernel(
     float* d_distances,
     uint32_t* d_buckets,
-    uint32_t* d_bucket_sizes,
-    uint32_t* d_bucket_offsets,
     float delta,
-    uint32_t max_nodes,
-    uint32_t num_buckets)
+    uint32_t max_nodes)
 {
     uint32_t tid = threadIdx.x + blockIdx.x * blockDim.x;
     
     if (tid >= max_nodes) return;
     
     float distance = d_distances[tid];
-    uint32_t current_bucket = d_buckets[tid];
-    
-    // Skip nodes that have been settled (bucket >= 1000000)
-    if (current_bucket >= 1000000) return;
-    
-    // Calculate what bucket this node should be in based on its distance
     uint32_t new_bucket = getBucketIndex(distance, delta);
-    
-    // Always update bucket assignment (even if it was UINT32_MAX before)
     d_buckets[tid] = new_bucket;
 }
 
