@@ -1,14 +1,30 @@
 cmake_minimum_required(VERSION 3.18)
-project(CUDAGraphRouting LANGUAGES CXX CUDA)
+
+# Option to build GPU targets (disabled by default on macOS)
+option(BUILD_GPU_TARGETS "Build GPU/CUDA targets" ON)
+
+# Detect macOS and disable GPU targets by default
+if(APPLE)
+    set(BUILD_GPU_TARGETS OFF CACHE BOOL "GPU targets disabled on macOS" FORCE)
+    message(STATUS "macOS detected: GPU targets disabled by default")
+    project(CUDAGraphRouting LANGUAGES CXX)
+else()
+    project(CUDAGraphRouting LANGUAGES CXX CUDA)
+endif()
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_CUDA_STANDARD 17)
-set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 
-# Enable CUDA
-enable_language(CUDA)
-find_package(CUDA REQUIRED)
+# Enable CUDA only if building GPU targets
+if(BUILD_GPU_TARGETS)
+    set(CMAKE_CUDA_STANDARD 17)
+    set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+    enable_language(CUDA)
+    find_package(CUDA REQUIRED)
+    message(STATUS "CUDA enabled for GPU targets")
+else()
+    message(STATUS "CUDA disabled - building CPU-only targets")
+endif()
 
 # Find required packages
 find_package(Threads REQUIRED)
@@ -63,24 +79,49 @@ target_link_libraries(cpu_dijkstra PRIVATE
     Threads::Threads
 )
 
-# GPU implementation
-add_executable(gpu_dijkstra 
-    src/gpu/main_gpu.cu
-    src/gpu/gpu_graph.cu
-    src/gpu/sssp_kernel.cu
-)
+# GPU implementation (only if CUDA is enabled)
+if(BUILD_GPU_TARGETS)
+    add_executable(gpu_dijkstra 
+        src/gpu/main_gpu.cu
+        src/gpu/gpu_graph.cu
+        src/gpu/sssp_kernel.cu
+    )
 
-# Set CUDA properties for GPU target
-set_target_properties(gpu_dijkstra PROPERTIES
-    CUDA_ARCHITECTURES "60;70;75;80"
-    CUDA_SEPARABLE_COMPILATION ON
-)
+    # Set CUDA properties for GPU target
+    set_target_properties(gpu_dijkstra PROPERTIES
+        CUDA_ARCHITECTURES "60;70;75;80"
+        CUDA_SEPARABLE_COMPILATION ON
+    )
 
-target_link_libraries(gpu_dijkstra PRIVATE
-    common_graph
-    ${CUDA_LIBRARIES}
-    cudart
-)
+    target_link_libraries(gpu_dijkstra PRIVATE
+        common_graph
+        ${CUDA_LIBRARIES}
+        cudart
+    )
+    
+    # Delta-stepping implementation
+    add_executable(delta_stepping
+        src/gpu/main_delta_stepping.cu
+        src/gpu/delta_stepping.cu
+        src/gpu/delta_stepping_kernel.cu
+        src/gpu/gpu_graph.cu
+    )
+    
+    set_target_properties(delta_stepping PROPERTIES
+        CUDA_ARCHITECTURES "60;70;75;80"
+        CUDA_SEPARABLE_COMPILATION ON
+    )
+    
+    target_link_libraries(delta_stepping PRIVATE
+        common_graph
+        ${CUDA_LIBRARIES}
+        cudart
+    )
+    
+    message(STATUS "GPU targets configured: gpu_dijkstra, delta_stepping")
+else()
+    message(STATUS "Skipping GPU targets (CUDA disabled)")
+endif()
 
 # Utilities
 add_executable(verify_graph src/utils/verify_graph.cpp)
@@ -91,10 +132,17 @@ target_link_libraries(verify_graph PRIVATE
 )
 
 # Set output directories
-set_target_properties(cpu_dijkstra gpu_dijkstra verify_graph
-    PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
-)
+if(BUILD_GPU_TARGETS)
+    set_target_properties(cpu_dijkstra gpu_dijkstra delta_stepping verify_graph
+        PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+else()
+    set_target_properties(cpu_dijkstra verify_graph
+        PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    )
+endif()
 
 if(TARGET graph_converter)
     set_target_properties(graph_converter

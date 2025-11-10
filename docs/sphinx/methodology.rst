@@ -214,3 +214,83 @@ vs. Sequential Dijkstra
      - Excellent with GPU memory
 
 The GPU implementation trades some space complexity for massive parallel speedup, making it highly effective for large-scale graph problems.
+
+Delta-stepping Algorithm
+------------------------
+
+Advanced Bucketed Approach
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The delta-stepping algorithm improves upon basic work-list SSSP by organizing nodes into distance-based buckets:
+
+1. **Bucket Assignment**: Nodes are assigned to buckets based on :math:`\lfloor d[v] / \delta \rfloor`
+2. **Sequential Processing**: Process buckets in order from smallest to largest distance
+3. **Parallel Relaxation**: All nodes within a bucket can be processed in parallel
+4. **Dynamic Updates**: Node bucket assignments update as distances improve
+
+.. code-block:: cuda
+
+   __global__ void delta_stepping_kernel(
+       const GPUGraph d_graph,
+       float* d_distances,
+       uint32_t* d_buckets,
+       uint32_t current_bucket,
+       float delta)
+
+Delta Parameter Selection
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+The choice of delta parameter significantly affects performance:
+
+* **Small Delta**: More buckets, better load balancing, higher memory overhead
+* **Large Delta**: Fewer buckets, potential load imbalance, lower memory usage
+* **Optimal Delta**: Typically average edge weight for road networks (100-500m)
+
+.. math::
+
+   \delta_{optimal} = \frac{1}{|E|} \sum_{(u,v) \in E} w(u,v)
+
+Convergence Properties
+^^^^^^^^^^^^^^^^^^^^^
+
+Delta-stepping provides better convergence guarantees:
+
+* **Bounded Iterations**: Maximum iterations = :math:`\lceil W_{max} / \delta \rceil`
+* **Predictable Performance**: Less sensitive to graph structure than work-list SSSP
+* **Load Balancing**: Better thread utilization across diverse query patterns
+
+Development Workflow
+-------------------
+
+Cross-platform Development
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The project supports development across different platforms:
+
+**macOS Development Environment:**
+
+.. code-block:: bash
+
+   # Setup Mac environment (CPU-only)
+   ./scripts/mac_dev_setup.sh
+   mkdir build-mac && cd build-mac
+   cmake .. -DBUILD_GPU_TARGETS=OFF
+   make cpu_dijkstra verify_graph
+
+**Remote GPU Testing:**
+
+.. code-block:: bash
+
+   # Deploy and test on remote GPU
+   ./scripts/remote_test.sh username@gpu-server.edu
+
+**Linux/Windows GPU Development:**
+
+.. code-block:: bash
+
+   # Full GPU build
+   mkdir build && cd build
+   cmake ..
+   make gpu_dijkstra delta_stepping cpu_dijkstra
+
+This workflow enables efficient development on Mac with seamless testing on remote GPU resources.

@@ -4,11 +4,12 @@ A high-performance GPU-accelerated implementation of shortest path algorithms fo
 
 ## Project Overview
 
-This project implements and compares CPU and GPU versions of Dijkstra's shortest path algorithm on the New York City road network (11.7M nodes, 25.3M edges). The implementation progresses through three phases:
+This project implements and compares CPU and GPU versions of shortest path algorithms on the New York City road network (11.7M nodes, 25.3M edges). The implementation includes multiple advanced algorithms:
 
 1. **Data Preprocessing**: Convert OpenStreetMap data to GPU-friendly CSR format
 2. **CPU Baseline**: Single-threaded Dijkstra implementation for performance baseline  
-3. **GPU Implementation**: CUDA-accelerated parallel shortest path computation
+3. **GPU Work-list SSSP**: CUDA-accelerated parallel shortest path computation
+4. **GPU Delta-stepping**: Advanced bucketed algorithm for improved convergence
 
 ## Project Structure
 
@@ -42,12 +43,26 @@ This project implements and compares CPU and GPU versions of Dijkstra's shortest
 
 ## Building
 
-### Quick Build (GPU Implementation)
+### macOS Development (CPU-only)
+
+For development on Mac with remote GPU testing:
+
+```bash
+# Setup Mac environment
+./scripts/mac_dev_setup.sh
+
+# Build CPU components locally
+mkdir build-mac && cd build-mac
+cmake .. -DBUILD_GPU_TARGETS=OFF
+make cpu_dijkstra verify_graph graph_converter
+```
+
+### Linux/Windows GPU Build
 
 ```bash
 mkdir build && cd build
 cmake ..
-make gpu_dijkstra cpu_dijkstra verify_graph
+make gpu_dijkstra delta_stepping cpu_dijkstra verify_graph
 ```
 
 ### Full Build (Including Preprocessing)
@@ -74,13 +89,25 @@ make  # Builds all targets including graph_converter
 ./bin/cpu_dijkstra ../../data/processed/nyc_graph.bin [source] [target]
 ```
 
-### 3. GPU Implementation
+### 3. GPU Work-list SSSP
 
 ```bash
 ./bin/gpu_dijkstra ../../data/processed/nyc_graph.bin [source] [target]
 ```
 
-### 4. Graph Verification
+### 4. GPU Delta-stepping
+
+```bash
+./bin/delta_stepping ../../data/processed/nyc_graph.bin [source] [target] [delta]
+```
+
+### 5. Remote GPU Testing (from Mac)
+
+```bash
+./scripts/remote_test.sh username@gpu-server.edu
+```
+
+### 6. Graph Verification
 
 ```bash
 ./bin/verify_graph ../../data/processed/nyc_graph.bin
@@ -110,11 +137,17 @@ make  # Builds all targets including graph_converter
 - Early termination when target is reached
 - Path reconstruction with predecessors
 
-### GPU Implementation  
+### GPU Work-list SSSP
 - Work-list based parallel SSSP kernel
 - Atomic operations for distance updates
 - Multi-iteration frontier expansion
 - Memory-coalesced graph traversal
+
+### GPU Delta-stepping
+- Bucketed priority queue approach
+- Configurable delta parameter for optimal performance
+- Better convergence properties for diverse query patterns
+- Batch processing capabilities
 
 ## Development
 
