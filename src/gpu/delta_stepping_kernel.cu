@@ -213,14 +213,61 @@ void launch_delta_stepping_kernel(
     CUDA_CHECK(cudaGetLastError());
 }
 
+void launch_delta_stepping_light_kernel(
+    const GPUGraph& gpu_graph,
+    float* d_distances,
+    uint32_t* d_buckets,
+    uint32_t current_bucket,
+    float delta,
+    uint32_t max_nodes,
+    uint32_t* d_updated_flag,
+    int block_size)
+{
+    int num_blocks = (max_nodes + block_size - 1) / block_size;
+    
+    delta_stepping_light_kernel<<<num_blocks, block_size>>>(
+        gpu_graph,
+        d_distances,
+        d_buckets,
+        current_bucket,
+        delta,
+        max_nodes,
+        d_updated_flag
+    );
+    
+    CUDA_CHECK(cudaGetLastError());
+}
+
+void launch_delta_stepping_heavy_kernel(
+    const GPUGraph& gpu_graph,
+    float* d_distances,
+    uint32_t* d_buckets,
+    uint32_t current_bucket,
+    float delta,
+    uint32_t max_nodes,
+    uint32_t* d_updated_flag,
+    int block_size)
+{
+    int num_blocks = (max_nodes + block_size - 1) / block_size;
+    
+    delta_stepping_heavy_kernel<<<num_blocks, block_size>>>(
+        gpu_graph,
+        d_distances,
+        d_buckets,
+        current_bucket,
+        delta,
+        max_nodes,
+        d_updated_flag
+    );
+    
+    CUDA_CHECK(cudaGetLastError());
+}
+
 void launch_bucket_update_kernel(
     float* d_distances,
     uint32_t* d_buckets,
-    uint32_t* d_bucket_sizes,
-    uint32_t* d_bucket_offsets,
     float delta,
     uint32_t max_nodes,
-    uint32_t num_buckets,
     int block_size)
 {
     int num_blocks = (max_nodes + block_size - 1) / block_size;
@@ -228,11 +275,8 @@ void launch_bucket_update_kernel(
     bucket_update_kernel<<<num_blocks, block_size>>>(
         d_distances,
         d_buckets,
-        d_bucket_sizes,
-        d_bucket_offsets,
         delta,
-        max_nodes,
-        num_buckets
+        max_nodes
     );
     
     CUDA_CHECK(cudaGetLastError());
