@@ -194,7 +194,35 @@ float GPUDeltaStepping::findShortestPath(uint32_t source, uint32_t target) {
         
         CUDA_CHECK(cudaDeviceSynchronize());
         
-        // Find next non-empty bucket
+        // CRITICAL: Update buckets BEFORE finding next bucket
+        // This ensures that relaxed neighbors get assigned to buckets
+        
+        // Update bucket assignments after relaxation
+        launch_bucket_update_kernel(
+            d_distances,
+            d_buckets,
+            d_bucket_sizes,
+            d_bucket_offsets,
+            config.delta,
+            max_nodes,
+            num_buckets,
+            256
+        );
+        
+        // Clear and recount bucket sizes for accuracy
+        CUDA_CHECK(cudaMemset(d_bucket_sizes, 0, num_buckets * sizeof(uint32_t)));
+        
+        launch_count_bucket_sizes(
+            d_buckets,
+            d_bucket_sizes,
+            max_nodes,
+            num_buckets,
+            256
+        );
+        
+        CUDA_CHECK(cudaDeviceSynchronize());
+        
+        // NOW find next non-empty bucket
         uint32_t old_bucket = current_bucket;
         current_bucket = findNextNonEmptyBucket();
         
