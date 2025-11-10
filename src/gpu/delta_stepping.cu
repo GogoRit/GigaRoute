@@ -251,9 +251,20 @@ float GPUDeltaStepping::findShortestPath(uint32_t source, uint32_t target) {
         
         iteration++;
         
-        // Debug: Show bucket transition
+        // Debug: Show bucket transition and check neighbor distances
         if (iteration <= 10) {
             std::cout << "Iteration " << iteration << ": " << old_bucket << " -> " << current_bucket << std::endl;
+            
+            // Check what happened to the first few neighbors
+            if (iteration == 1 && source == 0) {
+                std::vector<float> neighbor_distances(3);
+                uint32_t neighbors[3] = {1, 1110127, 4412508};
+                for (int i = 0; i < 3; i++) {
+                    CUDA_CHECK(cudaMemcpy(&neighbor_distances[i], &d_distances[neighbors[i]], 
+                                         sizeof(float), cudaMemcpyDeviceToHost));
+                    std::cout << "  Neighbor " << neighbors[i] << " distance: " << neighbor_distances[i] << std::endl;
+                }
+            }
         }
         
         // Progress reporting with debugging (show every iteration for debugging)

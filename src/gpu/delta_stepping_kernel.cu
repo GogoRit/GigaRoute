@@ -96,13 +96,16 @@ __global__ void bucket_update_kernel(
     
     if (tid >= max_nodes) return;
     
-    // Skip nodes that have been settled (bucket >= 1000000)
-    if (d_buckets[tid] >= 1000000) return;
-    
     float distance = d_distances[tid];
+    uint32_t current_bucket = d_buckets[tid];
+    
+    // Skip nodes that have been settled (bucket >= 1000000)
+    if (current_bucket >= 1000000) return;
+    
+    // Calculate what bucket this node should be in based on its distance
     uint32_t new_bucket = getBucketIndex(distance, delta);
     
-    // Update bucket assignment for unsettled nodes only
+    // Always update bucket assignment (even if it was UINT32_MAX before)
     d_buckets[tid] = new_bucket;
 }
 
