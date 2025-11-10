@@ -3,6 +3,7 @@
 #include <chrono>
 #include <algorithm>
 #include <cmath>
+#include <float.h>
 
 GPUDeltaStepping::GPUDeltaStepping(GPUGraphLoader* loader) 
     : graph_loader(loader), d_distances(nullptr), d_buckets(nullptr),
