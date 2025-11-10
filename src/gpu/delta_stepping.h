@@ -91,6 +91,12 @@ extern "C" {
         uint32_t max_nodes,
         int block_size = 256);
         
+    void launch_settle_bucket_kernel(
+        uint32_t* d_buckets,
+        uint32_t bucket_to_settle,
+        uint32_t max_nodes,
+        int block_size = 256);
+        
     void launch_init_delta_distances(
         float* d_distances,
         uint32_t* d_buckets,

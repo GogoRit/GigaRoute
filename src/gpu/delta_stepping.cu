@@ -177,6 +177,11 @@ float GPUDeltaStepping::findShortestPath(uint32_t source, uint32_t target) {
                 // Update bucket assignments after distance changes
                 launch_bucket_update_kernel(d_distances, d_buckets, config.delta, max_nodes, 256);
                 CUDA_CHECK(cudaDeviceSynchronize());
+                
+                // Recount bucket sizes after bucket updates
+                CUDA_CHECK(cudaMemset(d_bucket_sizes, 0, num_buckets * sizeof(uint32_t)));
+                launch_count_bucket_sizes(d_buckets, d_bucket_sizes, max_nodes, num_buckets, 256);
+                CUDA_CHECK(cudaDeviceSynchronize());
             }
             
             bucket_changed = (updated != 0);
@@ -200,8 +205,18 @@ float GPUDeltaStepping::findShortestPath(uint32_t source, uint32_t target) {
         
         CUDA_CHECK(cudaDeviceSynchronize());
         
+        // Mark nodes in current bucket as settled (move them to a high bucket number)
+        // This prevents them from being processed again
+        launch_settle_bucket_kernel(d_buckets, current_bucket, max_nodes, 256);
+        CUDA_CHECK(cudaDeviceSynchronize());
+        
         // Update buckets after heavy edge processing
         launch_bucket_update_kernel(d_distances, d_buckets, config.delta, max_nodes, 256);
+        CUDA_CHECK(cudaDeviceSynchronize());
+        
+        // Recount bucket sizes after heavy edge processing
+        CUDA_CHECK(cudaMemset(d_bucket_sizes, 0, num_buckets * sizeof(uint32_t)));
+        launch_count_bucket_sizes(d_buckets, d_bucket_sizes, max_nodes, num_buckets, 256);
         CUDA_CHECK(cudaDeviceSynchronize());
         
         // Find next non-empty bucket

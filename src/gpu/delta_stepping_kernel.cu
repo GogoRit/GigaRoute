@@ -128,6 +128,21 @@ __global__ void bucket_update_kernel(
     d_buckets[tid] = new_bucket;
 }
 
+// Kernel to mark nodes in a bucket as settled
+__global__ void settle_bucket_kernel(
+    uint32_t* d_buckets,
+    uint32_t bucket_to_settle,
+    uint32_t max_nodes)
+{
+    uint32_t tid = threadIdx.x + blockIdx.x * blockDim.x;
+    
+    if (tid >= max_nodes) return;
+    
+    if (d_buckets[tid] == bucket_to_settle) {
+        d_buckets[tid] = 1000000 + bucket_to_settle; // Mark as settled
+    }
+}
+
 // Kernel to count nodes in each bucket (separate pass for accuracy)
 __global__ void count_bucket_sizes_kernel(
     uint32_t* d_buckets,
@@ -250,6 +265,23 @@ void launch_bucket_update_kernel(
         d_distances,
         d_buckets,
         delta,
+        max_nodes
+    );
+    
+    CUDA_CHECK(cudaGetLastError());
+}
+
+void launch_settle_bucket_kernel(
+    uint32_t* d_buckets,
+    uint32_t bucket_to_settle,
+    uint32_t max_nodes,
+    int block_size)
+{
+    int num_blocks = (max_nodes + block_size - 1) / block_size;
+    
+    settle_bucket_kernel<<<num_blocks, block_size>>>(
+        d_buckets,
+        bucket_to_settle,
         max_nodes
     );
     
