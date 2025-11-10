@@ -35,18 +35,20 @@ __global__ void delta_stepping_kernel(
 {
     uint32_t tid = threadIdx.x + blockIdx.x * blockDim.x;
     
-    // Check if this thread has a node to process in current bucket
     if (tid >= max_nodes) return;
-    
-    // Only process nodes that belong to current bucket
-    uint32_t node_bucket = getBucketIndex(d_distances[tid], delta);
-    if (node_bucket != current_bucket) return;
     
     uint32_t current_node = tid;
     float current_distance = d_distances[current_node];
     
     // Skip if this node has infinite distance
     if (current_distance >= FLT_MAX) return;
+    
+    // Only process nodes that belong to current bucket based on their stored bucket assignment
+    if (d_buckets[current_node] != current_bucket) return;
+    
+    // Verify the node actually belongs to this bucket (double-check)
+    uint32_t expected_bucket = getBucketIndex(current_distance, delta);
+    if (expected_bucket != current_bucket) return;
     
     // Get the range of edges for this node using CSR format
     uint32_t edge_start = d_graph.d_row_pointers[current_node];
@@ -63,26 +65,15 @@ __global__ void delta_stepping_kernel(
         // Try to update neighbor's distance atomically
         float old_distance = atomicMinFloat(&d_distances[neighbor], new_distance);
         
-        // If we successfully improved the distance, update bucket assignment
+        // If we successfully improved the distance, mark for bucket update
         if (new_distance < old_distance) {
-            uint32_t new_bucket = getBucketIndex(new_distance, delta);
-            uint32_t old_bucket = getBucketIndex(old_distance, delta);
-            
-            // Update bucket assignment
-            d_buckets[neighbor] = new_bucket;
-            
-            // Update bucket sizes (this is approximate due to race conditions)
-            if (new_bucket != old_bucket && new_bucket != UINT32_MAX) {
-                atomicAdd(&d_bucket_sizes[new_bucket], 1);
-                if (old_bucket != UINT32_MAX) {
-                    atomicSub(&d_bucket_sizes[old_bucket], 1);
-                }
-            }
+            // The bucket update will happen in a separate kernel pass
+            // This avoids race conditions in bucket size tracking
         }
     }
 }
 
-// Kernel to update bucket assignments after distance changes
+// Kernel to rebuild bucket assignments and sizes from scratch
 __global__ void bucket_update_kernel(
     float* d_distances,
     uint32_t* d_buckets,
@@ -98,19 +89,25 @@ __global__ void bucket_update_kernel(
     
     float distance = d_distances[tid];
     uint32_t new_bucket = getBucketIndex(distance, delta);
-    uint32_t old_bucket = d_buckets[tid];
     
-    // Update bucket assignment if changed
-    if (new_bucket != old_bucket) {
-        d_buckets[tid] = new_bucket;
-        
-        // Update bucket sizes
-        if (new_bucket != UINT32_MAX && new_bucket < num_buckets) {
-            atomicAdd(&d_bucket_sizes[new_bucket], 1);
-        }
-        if (old_bucket != UINT32_MAX && old_bucket < num_buckets) {
-            atomicSub(&d_bucket_sizes[old_bucket], 1);
-        }
+    // Update bucket assignment
+    d_buckets[tid] = new_bucket;
+}
+
+// Kernel to count nodes in each bucket (separate pass for accuracy)
+__global__ void count_bucket_sizes_kernel(
+    uint32_t* d_buckets,
+    uint32_t* d_bucket_sizes,
+    uint32_t max_nodes,
+    uint32_t num_buckets)
+{
+    uint32_t tid = threadIdx.x + blockIdx.x * blockDim.x;
+    
+    if (tid >= max_nodes) return;
+    
+    uint32_t bucket = d_buckets[tid];
+    if (bucket != UINT32_MAX && bucket < num_buckets) {
+        atomicAdd(&d_bucket_sizes[bucket], 1);
     }
 }
 
@@ -220,6 +217,25 @@ void launch_init_delta_distances(
         d_buckets,
         num_nodes,
         source_node
+    );
+    
+    CUDA_CHECK(cudaGetLastError());
+}
+
+void launch_count_bucket_sizes(
+    uint32_t* d_buckets,
+    uint32_t* d_bucket_sizes,
+    uint32_t max_nodes,
+    uint32_t num_buckets,
+    int block_size)
+{
+    int num_blocks = (max_nodes + block_size - 1) / block_size;
+    
+    count_bucket_sizes_kernel<<<num_blocks, block_size>>>(
+        d_buckets,
+        d_bucket_sizes,
+        max_nodes,
+        num_buckets
     );
     
     CUDA_CHECK(cudaGetLastError());
