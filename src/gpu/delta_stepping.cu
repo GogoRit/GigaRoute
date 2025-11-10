@@ -150,6 +150,17 @@ float GPUDeltaStepping::findShortestPath(uint32_t source, uint32_t target) {
         bool bucket_updated = true;
         int bucket_iterations = 0;
         
+        // Count nodes in current bucket before processing
+        CUDA_CHECK(cudaMemset(d_bucket_sizes, 0, num_buckets * sizeof(uint32_t)));
+        launch_count_bucket_sizes(d_buckets, d_bucket_sizes, max_nodes, num_buckets, 256);
+        CUDA_CHECK(cudaDeviceSynchronize());
+        
+        uint32_t nodes_in_bucket = 0;
+        if (current_bucket < num_buckets) {
+            CUDA_CHECK(cudaMemcpy(&nodes_in_bucket, &d_bucket_sizes[current_bucket], 
+                                 sizeof(uint32_t), cudaMemcpyDeviceToHost));
+        }
+        
         while (bucket_updated && bucket_iterations < 50) {
             uint32_t zero = 0;
             CUDA_CHECK(cudaMemcpy(d_updated_flag, &zero, sizeof(uint32_t), cudaMemcpyHostToDevice));
@@ -174,6 +185,12 @@ float GPUDeltaStepping::findShortestPath(uint32_t source, uint32_t target) {
             
             bucket_updated = (updated != 0);
             bucket_iterations++;
+        }
+        
+        // Debug: Show how many nodes were processed
+        if (iteration <= 5) {
+            std::cout << "  Processed " << nodes_in_bucket << " nodes in bucket " << current_bucket 
+                     << " in " << bucket_iterations << " iterations" << std::endl;
         }
         
         // Now settle nodes in current bucket (they're still in current_bucket since we didn't update)
