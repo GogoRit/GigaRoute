@@ -146,53 +146,12 @@ float GPUDeltaStepping::findShortestPath(uint32_t source, uint32_t target) {
             }
         }
         
-        // Phase 1: Process light edges repeatedly until no more updates
-        bool bucket_changed = true;
-        int light_iterations = 0;
-        
-        while (bucket_changed && light_iterations < 100) {
-            // Reset update flag
-            uint32_t zero = 0;
-            CUDA_CHECK(cudaMemcpy(d_updated_flag, &zero, sizeof(uint32_t), cudaMemcpyHostToDevice));
-            
-            // Process light edges for current bucket
-            launch_delta_stepping_light_kernel(
-                gpu_graph,
-                d_distances,
-                d_buckets,
-                current_bucket,
-                config.delta,
-                max_nodes,
-                d_updated_flag,
-                256
-            );
-            
-            CUDA_CHECK(cudaDeviceSynchronize());
-            
-            // Check if any updates were made
-            uint32_t updated;
-            CUDA_CHECK(cudaMemcpy(&updated, d_updated_flag, sizeof(uint32_t), cudaMemcpyDeviceToHost));
-            
-            if (updated) {
-                // Update bucket assignments after distance changes
-                launch_bucket_update_kernel(d_distances, d_buckets, config.delta, max_nodes, 256);
-                CUDA_CHECK(cudaDeviceSynchronize());
-                
-                // Recount bucket sizes after bucket updates
-                CUDA_CHECK(cudaMemset(d_bucket_sizes, 0, num_buckets * sizeof(uint32_t)));
-                launch_count_bucket_sizes(d_buckets, d_bucket_sizes, max_nodes, num_buckets, 256);
-                CUDA_CHECK(cudaDeviceSynchronize());
-            }
-            
-            bucket_changed = (updated != 0);
-            light_iterations++;
-        }
-        
-        // Phase 2: Process heavy edges for settled nodes in current bucket
+        // Simplified: Process ALL edges for nodes in current bucket (no light/heavy split)
         uint32_t zero = 0;
         CUDA_CHECK(cudaMemcpy(d_updated_flag, &zero, sizeof(uint32_t), cudaMemcpyHostToDevice));
         
-        launch_delta_stepping_heavy_kernel(
+        // Process all edges for current bucket
+        launch_delta_stepping_light_kernel(
             gpu_graph,
             d_distances,
             d_buckets,
@@ -205,16 +164,15 @@ float GPUDeltaStepping::findShortestPath(uint32_t source, uint32_t target) {
         
         CUDA_CHECK(cudaDeviceSynchronize());
         
-        // Mark nodes in current bucket as settled (move them to a high bucket number)
-        // This prevents them from being processed again
+        // Mark nodes in current bucket as processed
         launch_settle_bucket_kernel(d_buckets, current_bucket, max_nodes, 256);
         CUDA_CHECK(cudaDeviceSynchronize());
         
-        // Update buckets after heavy edge processing
+        // Update ALL bucket assignments based on new distances
         launch_bucket_update_kernel(d_distances, d_buckets, config.delta, max_nodes, 256);
         CUDA_CHECK(cudaDeviceSynchronize());
         
-        // Recount bucket sizes after heavy edge processing
+        // Recount bucket sizes
         CUDA_CHECK(cudaMemset(d_bucket_sizes, 0, num_buckets * sizeof(uint32_t)));
         launch_count_bucket_sizes(d_buckets, d_bucket_sizes, max_nodes, num_buckets, 256);
         CUDA_CHECK(cudaDeviceSynchronize());
@@ -227,6 +185,17 @@ float GPUDeltaStepping::findShortestPath(uint32_t source, uint32_t target) {
         if (iteration <= 3) {
             std::cout << "After iteration " << iteration << ", next bucket: " << current_bucket << std::endl;
             
+            // Check bucket sizes after this iteration
+            std::vector<uint32_t> debug_bucket_sizes(std::min(10u, num_buckets));
+            CUDA_CHECK(cudaMemcpy(debug_bucket_sizes.data(), d_bucket_sizes, 
+                                 debug_bucket_sizes.size() * sizeof(uint32_t), cudaMemcpyDeviceToHost));
+            
+            std::cout << "  Bucket sizes [0-9]: ";
+            for (size_t i = 0; i < debug_bucket_sizes.size(); i++) {
+                std::cout << debug_bucket_sizes[i] << " ";
+            }
+            std::cout << std::endl;
+            
             // Check first few neighbor distances
             if (iteration == 1 && source == 0) {
                 std::vector<float> neighbor_distances(3);
@@ -235,6 +204,14 @@ float GPUDeltaStepping::findShortestPath(uint32_t source, uint32_t target) {
                     CUDA_CHECK(cudaMemcpy(&neighbor_distances[i], &d_distances[neighbors[i]], 
                                          sizeof(float), cudaMemcpyDeviceToHost));
                     std::cout << "  Neighbor " << neighbors[i] << " distance: " << neighbor_distances[i] << std::endl;
+                }
+                
+                // Check their bucket assignments
+                std::vector<uint32_t> neighbor_buckets(3);
+                for (int i = 0; i < 3; i++) {
+                    CUDA_CHECK(cudaMemcpy(&neighbor_buckets[i], &d_buckets[neighbors[i]], 
+                                         sizeof(uint32_t), cudaMemcpyDeviceToHost));
+                    std::cout << "  Neighbor " << neighbors[i] << " bucket: " << neighbor_buckets[i] << std::endl;
                 }
             }
         }
