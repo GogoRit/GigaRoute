@@ -76,16 +76,16 @@ void GPUDeltaStepping::freeGPUMemory() {
 }
 
 uint32_t GPUDeltaStepping::calculateOptimalDelta(const GPUGraph& graph) {
-    // Heuristic: delta should be roughly the average edge weight
-    // For road networks, this is typically 100-500 meters
+    // For debugging, use a much smaller delta to see if that helps
+    // The issue might be that 200m is too large for the algorithm to work correctly
     
-    // Simple heuristic based on graph size
+    // Try a very small delta first
     if (graph.num_nodes > 10000000) {
-        return 200.0f; // Large graphs (like NYC) - 200m buckets
+        return 10.0f; // Much smaller for debugging - 10m buckets
     } else if (graph.num_nodes > 1000000) {
-        return 100.0f; // Medium graphs - 100m buckets
+        return 5.0f; // Very small buckets
     } else {
-        return 50.0f;  // Small graphs - 50m buckets
+        return 1.0f;  // Tiny buckets for small graphs
     }
 }
 
@@ -199,10 +199,18 @@ float GPUDeltaStepping::findShortestPath(uint32_t source, uint32_t target) {
         
         iteration++;
         
-        // Progress reporting
+        // Progress reporting with debugging
         if (iteration % 100 == 0) {
+            // Get bucket sizes for debugging
+            std::vector<uint32_t> debug_bucket_sizes(std::min(10u, num_buckets));
+            CUDA_CHECK(cudaMemcpy(debug_bucket_sizes.data(), d_bucket_sizes, 
+                                 debug_bucket_sizes.size() * sizeof(uint32_t), cudaMemcpyDeviceToHost));
+            
             std::cout << "Iteration " << iteration << ", processing bucket " 
-                     << current_bucket;
+                     << current_bucket << ", bucket sizes [0-9]: ";
+            for (size_t i = 0; i < debug_bucket_sizes.size(); i++) {
+                std::cout << debug_bucket_sizes[i] << " ";
+            }
             if (iteration > 0 && target_distance < FLT_MAX) {
                 std::cout << ", target distance: " << target_distance;
             }

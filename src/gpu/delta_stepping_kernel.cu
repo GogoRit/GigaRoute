@@ -50,6 +50,10 @@ __global__ void delta_stepping_kernel(
     uint32_t expected_bucket = getBucketIndex(current_distance, delta);
     if (expected_bucket != current_bucket) return;
     
+    // Debug: Count how many nodes we're actually processing (remove this later)
+    // This will help us see if any work is being done
+    atomicAdd(&d_bucket_sizes[current_bucket], 0); // No-op but shows we're here
+    
     // Get the range of edges for this node using CSR format
     uint32_t edge_start = d_graph.d_row_pointers[current_node];
     uint32_t edge_end = d_graph.d_row_pointers[current_node + 1];
