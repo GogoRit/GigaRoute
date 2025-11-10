@@ -59,6 +59,13 @@ __global__ void delta_stepping_kernel(
     uint32_t edge_start = d_graph.d_row_pointers[current_node];
     uint32_t edge_end = d_graph.d_row_pointers[current_node + 1];
     
+    // Debug: Count how many edges this node has
+    uint32_t num_edges = edge_end - edge_start;
+    if (current_node == 0 && num_edges > 0) {
+        // Use atomic to signal that node 0 has edges (for debugging)
+        atomicAdd(&d_bucket_sizes[0], 0); // No-op but shows we found edges
+    }
+    
     // Process all outgoing edges from current_node
     for (uint32_t edge_idx = edge_start; edge_idx < edge_end; edge_idx++) {
         uint32_t neighbor = d_graph.d_column_indices[edge_idx];

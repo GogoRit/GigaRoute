@@ -136,6 +136,29 @@ float GPUDeltaStepping::findShortestPath(uint32_t source, uint32_t target) {
     
     std::cout << "Starting delta-stepping with delta = " << config.delta << std::endl;
     
+    // Debug: Check if source node has any neighbors
+    const GPUGraph& debug_graph = graph_loader->getGPUGraph();
+    std::vector<uint32_t> row_ptrs(3);
+    CUDA_CHECK(cudaMemcpy(row_ptrs.data(), debug_graph.d_row_pointers + source, 
+                         3 * sizeof(uint32_t), cudaMemcpyDeviceToHost));
+    uint32_t num_edges = row_ptrs[1] - row_ptrs[0];
+    std::cout << "Source node " << source << " has " << num_edges << " edges" << std::endl;
+    
+    if (num_edges > 0) {
+        std::vector<uint32_t> neighbors(std::min(5u, num_edges));
+        std::vector<float> weights(std::min(5u, num_edges));
+        CUDA_CHECK(cudaMemcpy(neighbors.data(), debug_graph.d_column_indices + row_ptrs[0], 
+                             neighbors.size() * sizeof(uint32_t), cudaMemcpyDeviceToHost));
+        CUDA_CHECK(cudaMemcpy(weights.data(), debug_graph.d_values + row_ptrs[0], 
+                             weights.size() * sizeof(float), cudaMemcpyDeviceToHost));
+        
+        std::cout << "First few neighbors: ";
+        for (size_t i = 0; i < neighbors.size(); i++) {
+            std::cout << neighbors[i] << "(" << weights[i] << "m) ";
+        }
+        std::cout << std::endl;
+    }
+    
     // Main delta-stepping loop
     while (current_bucket != UINT32_MAX && iteration < config.max_iterations) {
         
