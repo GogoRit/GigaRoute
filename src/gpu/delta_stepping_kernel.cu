@@ -50,8 +50,10 @@ __global__ void delta_stepping_kernel(
     uint32_t expected_bucket = getBucketIndex(current_distance, delta);
     if (expected_bucket != current_bucket) return;
     
-    // Mark this node as processed by removing it from its bucket
-    d_buckets[current_node] = UINT32_MAX; // Mark as processed
+    // After processing this node in this bucket, it should be "settled"
+    // Mark it as processed by setting its bucket to a special "settled" value
+    // Use current_bucket + 1000000 to indicate it was processed in this bucket
+    d_buckets[current_node] = current_bucket + 1000000;
     
     // Get the range of edges for this node using CSR format
     uint32_t edge_start = d_graph.d_row_pointers[current_node];
@@ -90,13 +92,13 @@ __global__ void bucket_update_kernel(
     
     if (tid >= max_nodes) return;
     
-    // Skip nodes that have been processed (marked as UINT32_MAX)
-    if (d_buckets[tid] == UINT32_MAX) return;
+    // Skip nodes that have been settled (bucket >= 1000000)
+    if (d_buckets[tid] >= 1000000) return;
     
     float distance = d_distances[tid];
     uint32_t new_bucket = getBucketIndex(distance, delta);
     
-    // Update bucket assignment (only for unprocessed nodes)
+    // Update bucket assignment for unsettled nodes only
     d_buckets[tid] = new_bucket;
 }
 
@@ -112,8 +114,8 @@ __global__ void count_bucket_sizes_kernel(
     if (tid >= max_nodes) return;
     
     uint32_t bucket = d_buckets[tid];
-    // Only count unprocessed nodes (processed nodes have bucket = UINT32_MAX)
-    if (bucket != UINT32_MAX && bucket < num_buckets) {
+    // Count only unsettled nodes (bucket < 1000000)
+    if (bucket != UINT32_MAX && bucket < num_buckets && bucket < 1000000) {
         atomicAdd(&d_bucket_sizes[bucket], 1);
     }
 }
