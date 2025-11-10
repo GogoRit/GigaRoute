@@ -64,25 +64,37 @@ private:
 
 // CUDA kernel function declarations
 extern "C" {
-    void launch_delta_stepping_kernel(
+    void launch_delta_stepping_light_kernel(
         const GPUGraph& gpu_graph,
         float* d_distances,
         uint32_t* d_buckets,
-        uint32_t* d_bucket_sizes,
-        uint32_t* d_bucket_offsets,
         uint32_t current_bucket,
         float delta,
         uint32_t max_nodes,
+        uint32_t* d_updated_flag,
+        int block_size = 256);
+        
+    void launch_delta_stepping_heavy_kernel(
+        const GPUGraph& gpu_graph,
+        float* d_distances,
+        uint32_t* d_buckets,
+        uint32_t current_bucket,
+        float delta,
+        uint32_t max_nodes,
+        uint32_t* d_updated_flag,
         int block_size = 256);
         
     void launch_bucket_update_kernel(
         float* d_distances,
         uint32_t* d_buckets,
-        uint32_t* d_bucket_sizes,
-        uint32_t* d_bucket_offsets,
         float delta,
         uint32_t max_nodes,
-        uint32_t num_buckets,
+        int block_size = 256);
+        
+    void launch_settle_bucket_kernel(
+        uint32_t* d_buckets,
+        uint32_t bucket_to_settle,
+        uint32_t max_nodes,
         int block_size = 256);
         
     void launch_init_delta_distances(
@@ -90,6 +102,13 @@ extern "C" {
         uint32_t* d_buckets,
         uint32_t num_nodes,
         uint32_t source_node,
+        int block_size = 256);
+        
+    void launch_count_bucket_sizes(
+        uint32_t* d_buckets,
+        uint32_t* d_bucket_sizes,
+        uint32_t max_nodes,
+        uint32_t num_buckets,
         int block_size = 256);
 }
 

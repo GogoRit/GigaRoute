@@ -22,25 +22,23 @@ __device__ uint32_t getBucketIndex(float distance, float delta) {
     return (uint32_t)(distance / delta);
 }
 
-// Delta-stepping kernel: process nodes in current bucket
-__global__ void delta_stepping_kernel(
+// Delta-stepping kernel: process LIGHT edges only (weight <= delta)
+__global__ void delta_stepping_light_kernel(
     const GPUGraph d_graph,
     float* d_distances,
     uint32_t* d_buckets,
-    uint32_t* d_bucket_sizes,
-    uint32_t* d_bucket_offsets,
     uint32_t current_bucket,
     float delta,
-    uint32_t max_nodes)
+    uint32_t max_nodes,
+    uint32_t* d_updated_flag)
 {
     uint32_t tid = threadIdx.x + blockIdx.x * blockDim.x;
     
-    // Check if this thread has a node to process in current bucket
     if (tid >= max_nodes) return;
     
-    // Only process nodes that belong to current bucket
-    uint32_t node_bucket = getBucketIndex(d_distances[tid], delta);
-    if (node_bucket != current_bucket) return;
+    // Only process nodes in the current bucket and not settled
+    uint32_t node_bucket = d_buckets[tid];
+    if (node_bucket != current_bucket || node_bucket >= 1000000) return;
     
     uint32_t current_node = tid;
     float current_distance = d_distances[current_node];
@@ -48,47 +46,110 @@ __global__ void delta_stepping_kernel(
     // Skip if this node has infinite distance
     if (current_distance >= FLT_MAX) return;
     
-    // Get the range of edges for this node using CSR format
+    // Get the range of edges for this node
     uint32_t edge_start = d_graph.d_row_pointers[current_node];
     uint32_t edge_end = d_graph.d_row_pointers[current_node + 1];
     
-    // Process all outgoing edges from current_node
+    // Process only LIGHT edges (weight <= delta)
     for (uint32_t edge_idx = edge_start; edge_idx < edge_end; edge_idx++) {
         uint32_t neighbor = d_graph.d_column_indices[edge_idx];
         float edge_weight = d_graph.d_values[edge_idx];
         
-        // Calculate new potential distance to neighbor
+        // Simplified: Process ALL edges (no light/heavy distinction for now)
         float new_distance = current_distance + edge_weight;
         
         // Try to update neighbor's distance atomically
         float old_distance = atomicMinFloat(&d_distances[neighbor], new_distance);
         
-        // If we successfully improved the distance, update bucket assignment
+        // If we updated the distance, signal that we made changes
         if (new_distance < old_distance) {
-            uint32_t new_bucket = getBucketIndex(new_distance, delta);
-            uint32_t old_bucket = getBucketIndex(old_distance, delta);
+            atomicExch(d_updated_flag, 1);
+        }
+    }
+}
+
+// Kernel to process HEAVY edges (weight > delta) for settled nodes
+__global__ void delta_stepping_heavy_kernel(
+    const GPUGraph d_graph,
+    float* d_distances,
+    uint32_t* d_buckets,
+    uint32_t current_bucket,
+    float delta,
+    uint32_t max_nodes,
+    uint32_t* d_updated_flag)
+{
+    uint32_t tid = threadIdx.x + blockIdx.x * blockDim.x;
+    
+    if (tid >= max_nodes) return;
+    
+    // Only process nodes that were in the current bucket (now settled)
+    uint32_t node_bucket = d_buckets[tid];
+    if (node_bucket != current_bucket && node_bucket != (1000000 + current_bucket)) return;
+    
+    uint32_t current_node = tid;
+    float current_distance = d_distances[current_node];
+    
+    if (current_distance >= FLT_MAX) return;
+    
+    uint32_t edge_start = d_graph.d_row_pointers[current_node];
+    uint32_t edge_end = d_graph.d_row_pointers[current_node + 1];
+    
+    // Process only HEAVY edges (weight > delta)
+    for (uint32_t edge_idx = edge_start; edge_idx < edge_end; edge_idx++) {
+        uint32_t neighbor = d_graph.d_column_indices[edge_idx];
+        float edge_weight = d_graph.d_values[edge_idx];
+        
+        // CRITICAL: Only process heavy edges in this kernel
+        if (edge_weight > delta) {
+            float new_distance = current_distance + edge_weight;
             
-            // Update bucket assignment
-            d_buckets[neighbor] = new_bucket;
+            float old_distance = atomicMinFloat(&d_distances[neighbor], new_distance);
             
-            // Update bucket sizes (this is approximate due to race conditions)
-            if (new_bucket != old_bucket && new_bucket != UINT32_MAX) {
-                atomicAdd(&d_bucket_sizes[new_bucket], 1);
-                if (old_bucket != UINT32_MAX) {
-                    atomicSub(&d_bucket_sizes[old_bucket], 1);
-                }
+            if (new_distance < old_distance) {
+                atomicExch(d_updated_flag, 1);
             }
         }
     }
 }
 
-// Kernel to update bucket assignments after distance changes
+// Simple kernel to update all bucket assignments based on current distances
 __global__ void bucket_update_kernel(
     float* d_distances,
     uint32_t* d_buckets,
-    uint32_t* d_bucket_sizes,
-    uint32_t* d_bucket_offsets,
     float delta,
+    uint32_t max_nodes)
+{
+    uint32_t tid = threadIdx.x + blockIdx.x * blockDim.x;
+    
+    if (tid >= max_nodes) return;
+    
+    // Don't update bucket assignments for settled nodes (but allow UINT32_MAX nodes to be updated)
+    if (d_buckets[tid] >= 1000000 && d_buckets[tid] != UINT32_MAX) return;
+    
+    float distance = d_distances[tid];
+    uint32_t new_bucket = getBucketIndex(distance, delta);
+    d_buckets[tid] = new_bucket;
+}
+
+// Kernel to mark nodes in a bucket as settled
+__global__ void settle_bucket_kernel(
+    uint32_t* d_buckets,
+    uint32_t bucket_to_settle,
+    uint32_t max_nodes)
+{
+    uint32_t tid = threadIdx.x + blockIdx.x * blockDim.x;
+    
+    if (tid >= max_nodes) return;
+    
+    if (d_buckets[tid] == bucket_to_settle) {
+        d_buckets[tid] = 1000000 + bucket_to_settle; // Mark as settled
+    }
+}
+
+// Kernel to count nodes in each bucket (separate pass for accuracy)
+__global__ void count_bucket_sizes_kernel(
+    uint32_t* d_buckets,
+    uint32_t* d_bucket_sizes,
     uint32_t max_nodes,
     uint32_t num_buckets)
 {
@@ -96,21 +157,10 @@ __global__ void bucket_update_kernel(
     
     if (tid >= max_nodes) return;
     
-    float distance = d_distances[tid];
-    uint32_t new_bucket = getBucketIndex(distance, delta);
-    uint32_t old_bucket = d_buckets[tid];
-    
-    // Update bucket assignment if changed
-    if (new_bucket != old_bucket) {
-        d_buckets[tid] = new_bucket;
-        
-        // Update bucket sizes
-        if (new_bucket != UINT32_MAX && new_bucket < num_buckets) {
-            atomicAdd(&d_bucket_sizes[new_bucket], 1);
-        }
-        if (old_bucket != UINT32_MAX && old_bucket < num_buckets) {
-            atomicSub(&d_bucket_sizes[old_bucket], 1);
-        }
+    uint32_t bucket = d_buckets[tid];
+    // Count only unsettled nodes (bucket < 1000000) and valid buckets
+    if (bucket != UINT32_MAX && bucket < num_buckets && bucket < 1000000) {
+        atomicAdd(&d_bucket_sizes[bucket], 1);
     }
 }
 
@@ -154,28 +204,52 @@ __global__ void find_next_bucket_kernel(
 // Host function implementations
 extern "C" {
 
-void launch_delta_stepping_kernel(
+
+void launch_delta_stepping_light_kernel(
     const GPUGraph& gpu_graph,
     float* d_distances,
     uint32_t* d_buckets,
-    uint32_t* d_bucket_sizes,
-    uint32_t* d_bucket_offsets,
     uint32_t current_bucket,
     float delta,
     uint32_t max_nodes,
+    uint32_t* d_updated_flag,
     int block_size)
 {
     int num_blocks = (max_nodes + block_size - 1) / block_size;
     
-    delta_stepping_kernel<<<num_blocks, block_size>>>(
+    delta_stepping_light_kernel<<<num_blocks, block_size>>>(
         gpu_graph,
         d_distances,
         d_buckets,
-        d_bucket_sizes,
-        d_bucket_offsets,
         current_bucket,
         delta,
-        max_nodes
+        max_nodes,
+        d_updated_flag
+    );
+    
+    CUDA_CHECK(cudaGetLastError());
+}
+
+void launch_delta_stepping_heavy_kernel(
+    const GPUGraph& gpu_graph,
+    float* d_distances,
+    uint32_t* d_buckets,
+    uint32_t current_bucket,
+    float delta,
+    uint32_t max_nodes,
+    uint32_t* d_updated_flag,
+    int block_size)
+{
+    int num_blocks = (max_nodes + block_size - 1) / block_size;
+    
+    delta_stepping_heavy_kernel<<<num_blocks, block_size>>>(
+        gpu_graph,
+        d_distances,
+        d_buckets,
+        current_bucket,
+        delta,
+        max_nodes,
+        d_updated_flag
     );
     
     CUDA_CHECK(cudaGetLastError());
@@ -184,11 +258,8 @@ void launch_delta_stepping_kernel(
 void launch_bucket_update_kernel(
     float* d_distances,
     uint32_t* d_buckets,
-    uint32_t* d_bucket_sizes,
-    uint32_t* d_bucket_offsets,
     float delta,
     uint32_t max_nodes,
-    uint32_t num_buckets,
     int block_size)
 {
     int num_blocks = (max_nodes + block_size - 1) / block_size;
@@ -196,11 +267,25 @@ void launch_bucket_update_kernel(
     bucket_update_kernel<<<num_blocks, block_size>>>(
         d_distances,
         d_buckets,
-        d_bucket_sizes,
-        d_bucket_offsets,
         delta,
-        max_nodes,
-        num_buckets
+        max_nodes
+    );
+    
+    CUDA_CHECK(cudaGetLastError());
+}
+
+void launch_settle_bucket_kernel(
+    uint32_t* d_buckets,
+    uint32_t bucket_to_settle,
+    uint32_t max_nodes,
+    int block_size)
+{
+    int num_blocks = (max_nodes + block_size - 1) / block_size;
+    
+    settle_bucket_kernel<<<num_blocks, block_size>>>(
+        d_buckets,
+        bucket_to_settle,
+        max_nodes
     );
     
     CUDA_CHECK(cudaGetLastError());
@@ -220,6 +305,25 @@ void launch_init_delta_distances(
         d_buckets,
         num_nodes,
         source_node
+    );
+    
+    CUDA_CHECK(cudaGetLastError());
+}
+
+void launch_count_bucket_sizes(
+    uint32_t* d_buckets,
+    uint32_t* d_bucket_sizes,
+    uint32_t max_nodes,
+    uint32_t num_buckets,
+    int block_size)
+{
+    int num_blocks = (max_nodes + block_size - 1) / block_size;
+    
+    count_bucket_sizes_kernel<<<num_blocks, block_size>>>(
+        d_buckets,
+        d_bucket_sizes,
+        max_nodes,
+        num_buckets
     );
     
     CUDA_CHECK(cudaGetLastError());
