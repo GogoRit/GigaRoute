@@ -122,8 +122,9 @@ make  # Builds all targets including graph_converter
 
 ### GPU Implementation (CUDA)
 - **Hardware**: NVIDIA GTX 1080
-- **Performance**: [To be measured]
-- **Memory**: GPU memory optimized with CSR format
+- **GPU Work-list SSSP**: ~3.8 seconds per query (2600 iterations)
+- **GPU Delta-stepping**: ~84 seconds per query (7607 iterations) - baseline implementation
+- **Memory**: GPU memory optimized with CSR format (~237MB for NYC graph)
 
 ## Algorithm Details
 
@@ -144,10 +145,12 @@ make  # Builds all targets including graph_converter
 - Memory-coalesced graph traversal
 
 ### GPU Delta-stepping
-- Bucketed priority queue approach
-- Configurable delta parameter for optimal performance
-- Better convergence properties for diverse query patterns
-- Batch processing capabilities
+- **Status**: Baseline implementation complete and verified
+- Bucketed priority queue approach for parallel processing
+- Configurable delta parameter (currently 50m for NYC graph)
+- Successfully finds paths matching CPU Dijkstra results (verified: 380.361 km)
+- **Performance**: Currently slower than GPU work-list SSSP - optimization phase next
+- Batch processing capabilities (framework ready)
 
 ## Development
 
