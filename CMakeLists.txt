@@ -81,10 +81,11 @@ target_link_libraries(cpu_dijkstra PRIVATE
 
 # GPU implementation (only if CUDA is enabled)
 if(BUILD_GPU_TARGETS)
+    # GPU Dijkstra (Work-list SSSP) implementation
     add_executable(gpu_dijkstra 
-        src/gpu/main_gpu.cu
-        src/gpu/gpu_graph.cu
-        src/gpu/sssp_kernel.cu
+        src/gpu/dijkstra/main_gpu.cu
+        src/gpu/dijkstra/sssp_kernel.cu
+        src/gpu/common/gpu_graph.cu
     )
 
     # Set CUDA properties for GPU target
@@ -99,12 +100,12 @@ if(BUILD_GPU_TARGETS)
         cudart
     )
     
-    # Delta-stepping implementation
+    # GPU Delta-stepping implementation
     add_executable(delta_stepping
-        src/gpu/main_delta_stepping.cu
-        src/gpu/delta_stepping.cu
-        src/gpu/delta_stepping_kernel.cu
-        src/gpu/gpu_graph.cu
+        src/gpu/delta_stepping/main_delta_stepping.cu
+        src/gpu/delta_stepping/delta_stepping.cu
+        src/gpu/delta_stepping/delta_stepping_kernel.cu
+        src/gpu/common/gpu_graph.cu
     )
     
     set_target_properties(delta_stepping PROPERTIES

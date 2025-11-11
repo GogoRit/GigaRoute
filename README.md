@@ -15,17 +15,31 @@ This project implements and compares CPU and GPU versions of shortest path algor
 
 ```
 ├── src/
-│   ├── common/          # Shared graph utilities
-│   ├── preprocessing/   # OSM data conversion (Phase 1)
-│   ├── cpu/            # CPU baseline implementation (Phase 2)  
-│   ├── gpu/            # GPU CUDA implementation (Phase 3)
-│   └── utils/          # Verification and benchmarking tools
+│   ├── common/              # Shared graph utilities
+│   ├── preprocessing/       # OSM data conversion (Phase 1)
+│   ├── cpu/                  # CPU baseline implementation (Phase 2)
+│   │   ├── dijkstra_cpu.cpp
+│   │   ├── dijkstra_cpu.h
+│   │   └── main_cpu.cpp
+│   ├── gpu/                  # GPU CUDA implementations (Phase 3+)
+│   │   ├── common/           # Shared GPU utilities
+│   │   │   ├── gpu_graph.cu
+│   │   │   └── gpu_graph.h
+│   │   ├── dijkstra/         # GPU Work-list SSSP algorithm
+│   │   │   ├── main_gpu.cu
+│   │   │   └── sssp_kernel.cu
+│   │   └── delta_stepping/   # GPU Delta-stepping algorithm
+│   │       ├── delta_stepping.cu
+│   │       ├── delta_stepping.h
+│   │       ├── delta_stepping_kernel.cu
+│   │       └── main_delta_stepping.cu
+│   └── utils/                # Verification and benchmarking tools
 ├── data/
-│   ├── raw/            # Original OSM data files (gitignored)
-│   └── processed/      # Binary graph files (gitignored)
-├── docs/               # Documentation and progress reports
-├── build/              # Build artifacts (gitignored)
-└── scripts/            # Build and execution scripts
+│   ├── raw/                  # Original OSM data files (gitignored)
+│   └── processed/            # Binary graph files (gitignored)
+├── docs/                     # Documentation and progress reports
+├── build/                    # Build artifacts (gitignored)
+└── scripts/                  # Build and execution scripts
 ```
 
 ## Requirements

@@ -1,4 +1,4 @@
-#include "gpu_graph.h"
+#include "../common/gpu_graph.h"
 #include <iostream>
 #include <chrono>
 #include <vector>

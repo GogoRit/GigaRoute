@@ -1,7 +1,7 @@
 #ifndef DELTA_STEPPING_H
 #define DELTA_STEPPING_H
 
-#include "gpu_graph.h"
+#include "../common/gpu_graph.h"
 #include <vector>
 #include <cstdint>
 

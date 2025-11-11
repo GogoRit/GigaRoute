@@ -1,27 +1,109 @@
-# C++ and CMake build files
+# Build directories
 build/
-*.o
-*.a
-*.so
-*.exe
+build-*/
 cmake-build-*/
+out/
+dist/
+
+# CMake generated files
 CMakeCache.txt
 CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+*.cmake
+!CMakeLists.txt
+Makefile
+
+# Compiled Object files
+*.o
+*.obj
+*.lo
+*.slo
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Compiled Dynamic libraries
+*.so
+*.dylib
+*.dll
+
+# Compiled Static libraries
+*.a
+*.lib
+
+# Executables
+*.exe
+*.out
+*.app
+bin/
+!scripts/
 
 # IDE/Editor specific files
 .vscode/
 .idea/
+*.swp
+*.swo
+*~
 *.suo
 *.user
+*.userosscache
+*.sln.docstates
 *.pdb
 *.opensdf
+*.sdf
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
 
-# CUDA files
+# CUDA compilation artifacts
 *.ptx
 *.cubin
 *.fatbin
+*.cudafe1.c
+*.cudafe2.c
+*.cudafe1.cpp
+*.cudafe2.cpp
+*.cudafe1.gpu
+*.cudafe2.gpu
+*.cudafe1.stub.c
+*.cudafe2.stub.c
+*.cudafe1.fatbin
+*.cudafe2.fatbin
 
 # Data files (large binary files)
-data/
+data/raw/
+data/processed/
 *.bin
 *.pbf
+*.osm
+*.osm.pbf
+
+# Documentation build
+docs/_build/
+docs/build/
+
+# Python (if any scripts)
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# OS specific
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+*.bak
+*.swp

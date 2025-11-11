@@ -1,4 +1,4 @@
-#include "gpu_graph.h"
+#include "../common/gpu_graph.h"
 #include <device_launch_parameters.h>
 #include <float.h>
 
