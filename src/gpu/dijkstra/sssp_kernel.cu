@@ -27,27 +27,17 @@ __global__ void sssp_kernel(
     uint32_t* d_worklist_flags,
     const float delta)
 {
-    // OPTIMIZATION: Use shared memory to cache worklist nodes for better memory access
-    // Dynamic size based on blockDim.x (max 1024 threads per block)
-    __shared__ uint32_t s_worklist[1024];  // Cache worklist nodes in shared memory
-    
     // Calculate global thread ID
     uint32_t tid = threadIdx.x + blockIdx.x * blockDim.x;
-    uint32_t local_tid = threadIdx.x;
-    
-    // Cooperative loading: each thread loads one worklist node into shared memory
-    if (tid < num_current_nodes && local_tid < blockDim.x) {
-        s_worklist[local_tid] = d_worklist[tid];
-    }
-    __syncthreads();
     
     // Check if thread has work to do
     if (tid >= num_current_nodes) {
         return;
     }
     
-    // Get the node this thread will process (from shared memory if available, else global)
-    uint32_t current_node = (local_tid < blockDim.x) ? s_worklist[local_tid] : d_worklist[tid];
+    // Get the node this thread will process
+    // Note: Shared memory caching removed - overhead from __syncthreads() was worse than benefit
+    uint32_t current_node = d_worklist[tid];
     
     // Get current distance to this node
     float current_distance = d_distances[current_node];
