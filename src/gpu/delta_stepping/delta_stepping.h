@@ -112,6 +112,13 @@ extern "C" {
         uint32_t max_nodes,
         uint32_t num_buckets,
         int block_size = 256);
+        
+    void launch_find_next_bucket(
+        uint32_t* d_bucket_sizes,
+        uint32_t* d_next_bucket,
+        uint32_t num_buckets,
+        uint32_t start_bucket,
+        int block_size = 256);
 }
 
 #endif // DELTA_STEPPING_H

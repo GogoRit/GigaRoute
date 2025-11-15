@@ -111,20 +111,16 @@ void GPUDeltaStepping::resetDistances(uint32_t source) {
 }
 
 uint32_t GPUDeltaStepping::findNextNonEmptyBucket() {
-    // Simple linear search for next non-empty bucket
-    // In a production system, this could be optimized with parallel reduction
+    // GPU-based parallel search - much faster than host-side linear search
+    // This eliminates the expensive host-device memory transfer (172K buckets * 4 bytes)
     
-    std::vector<uint32_t> bucket_sizes(num_buckets);
-    CUDA_CHECK(cudaMemcpy(bucket_sizes.data(), d_bucket_sizes, 
-                         num_buckets * sizeof(uint32_t), cudaMemcpyDeviceToHost));
+    launch_find_next_bucket(d_bucket_sizes, d_next_bucket, num_buckets, 0, 256);
+    CUDA_CHECK(cudaDeviceSynchronize());
     
-    for (uint32_t i = 0; i < num_buckets; i++) {
-        if (bucket_sizes[i] > 0) {
-            return i;
-        }
-    }
+    uint32_t next_bucket = UINT32_MAX;
+    CUDA_CHECK(cudaMemcpy(&next_bucket, d_next_bucket, sizeof(uint32_t), cudaMemcpyDeviceToHost));
     
-    return UINT32_MAX; // No non-empty buckets found
+    return next_bucket;
 }
 
 float GPUDeltaStepping::findShortestPath(uint32_t source, uint32_t target) {

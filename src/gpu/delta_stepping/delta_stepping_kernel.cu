@@ -339,4 +339,27 @@ void launch_count_bucket_sizes(
     CUDA_CHECK(cudaGetLastError());
 }
 
+void launch_find_next_bucket(
+    uint32_t* d_bucket_sizes,
+    uint32_t* d_next_bucket,
+    uint32_t num_buckets,
+    uint32_t start_bucket,
+    int block_size)
+{
+    // Initialize result to UINT32_MAX
+    uint32_t init_value = UINT32_MAX;
+    CUDA_CHECK(cudaMemcpy(d_next_bucket, &init_value, sizeof(uint32_t), cudaMemcpyHostToDevice));
+    
+    int num_blocks = (num_buckets + block_size - 1) / block_size;
+    
+    find_next_bucket_kernel<<<num_blocks, block_size>>>(
+        d_bucket_sizes,
+        d_next_bucket,
+        num_buckets,
+        start_bucket
+    );
+    
+    CUDA_CHECK(cudaGetLastError());
+}
+
 } // extern "C"
