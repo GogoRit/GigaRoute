@@ -24,7 +24,7 @@ __global__ void sssp_kernel(
     uint32_t* d_new_worklist,
     const uint32_t num_current_nodes,
     uint32_t* d_new_worklist_size,
-    uint8_t* d_worklist_flags,
+    uint32_t* d_worklist_flags,
     const float delta)
 {
     // Calculate global thread ID
@@ -103,7 +103,7 @@ void launch_sssp_kernel(
     uint32_t* d_new_worklist,
     uint32_t num_current_nodes,
     uint32_t* d_new_worklist_size,
-    uint8_t* d_worklist_flags,
+    uint32_t* d_worklist_flags,
     float delta,
     int block_size = 256)
 {
