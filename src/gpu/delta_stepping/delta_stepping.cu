@@ -198,10 +198,11 @@ float GPUDeltaStepping::findShortestPath(uint32_t source, uint32_t target) {
                 256
             );
             
-            // Update bucket assignments asynchronously (no sync needed yet)
-            launch_bucket_update_kernel(d_distances, d_buckets, config.delta, max_nodes, 256);
+            // CRITICAL FIX: Don't update bucket assignments during light edge processing
+            // This prevents nodes from moving out of current bucket prematurely
+            // We'll update buckets after all light edges are processed
             
-            // Synchronize once for both kernels
+            // Synchronize to ensure light edge processing completes
             CUDA_CHECK(cudaDeviceSynchronize());
             
             // Check if any updates were made
@@ -209,6 +210,11 @@ float GPUDeltaStepping::findShortestPath(uint32_t source, uint32_t target) {
             CUDA_CHECK(cudaMemcpy(&updated, d_updated_flag, sizeof(uint32_t), cudaMemcpyDeviceToHost));
             
             if (updated) {
+                // Update bucket assignments only after checking for updates
+                // This ensures nodes stay in current bucket during processing
+                launch_bucket_update_kernel(d_distances, d_buckets, config.delta, max_nodes, 256);
+                CUDA_CHECK(cudaDeviceSynchronize());
+                
                 // Only recount if needed for debug
                 if (config.debug_mode) {
                     CUDA_CHECK(cudaMemset(d_bucket_sizes, 0, num_buckets * sizeof(uint32_t)));
@@ -236,13 +242,18 @@ float GPUDeltaStepping::findShortestPath(uint32_t source, uint32_t target) {
                      << " in " << bucket_iterations << " iterations" << std::endl;
         }
         
-        // CRITICAL: Update bucket assignments BEFORE settling
+        // CRITICAL: Final bucket assignment update BEFORE settling
+        // This ensures all nodes relaxed by light edges are in correct buckets
         launch_bucket_update_kernel(d_distances, d_buckets, config.delta, max_nodes, 256);
+        CUDA_CHECK(cudaDeviceSynchronize());
         
         // Now settle nodes that are still in the current bucket
         launch_settle_bucket_kernel(d_buckets, current_bucket, max_nodes, 256);
+        CUDA_CHECK(cudaDeviceSynchronize());
         
         // Process HEAVY edges for settled nodes (true delta-stepping)
+        // CRITICAL FIX: Process heavy edges BEFORE updating bucket assignments
+        // This ensures all heavy edges from settled nodes are processed
         uint32_t zero = 0;
         CUDA_CHECK(cudaMemcpy(d_updated_flag, &zero, sizeof(uint32_t), cudaMemcpyHostToDevice));
         launch_delta_stepping_heavy_kernel(
@@ -255,11 +266,11 @@ float GPUDeltaStepping::findShortestPath(uint32_t source, uint32_t target) {
             d_updated_flag,
             256
         );
+        CUDA_CHECK(cudaDeviceSynchronize());
         
         // Update bucket assignments for nodes relaxed via heavy edges
+        // This must happen AFTER heavy edge processing to ensure correctness
         launch_bucket_update_kernel(d_distances, d_buckets, config.delta, max_nodes, 256);
-        
-        // Synchronize once for all operations
         CUDA_CHECK(cudaDeviceSynchronize());
         
         // Recount bucket sizes (only when needed for finding next bucket)

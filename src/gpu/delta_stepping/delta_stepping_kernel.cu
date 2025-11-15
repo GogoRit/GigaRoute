@@ -89,7 +89,9 @@ __global__ void delta_stepping_heavy_kernel(
     if (tid >= max_nodes) return;
     
     // Only process nodes that were in the current bucket (now settled)
+    // After settling, nodes have bucket = 1000000 + current_bucket
     uint32_t node_bucket = d_buckets[tid];
+    // Process if: (1) still in current bucket, or (2) settled from current bucket
     if (node_bucket != current_bucket && node_bucket != (1000000 + current_bucket)) return;
     
     uint32_t current_node = tid;
