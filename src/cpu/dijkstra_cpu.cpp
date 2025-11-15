@@ -49,7 +49,18 @@ float DijkstraPathfinder::findShortestPath(uint32_t source, uint32_t target) {
         // Explore neighbors
         uint32_t start_edge = graph.row_pointers[current_node];
         uint32_t end_edge = graph.row_pointers[current_node + 1];
-        
+
+        // DEBUG: Print source node edges
+        if (current_node == 0) {
+            std::cout << "CPU DEBUG: Processing source node 0, distance: " << current_dist << std::endl;
+            std::cout << "CPU DEBUG: Source node edges: " << start_edge << " to " << end_edge << std::endl;
+            if (end_edge > start_edge) {
+                uint32_t neighbor = graph.column_indices[start_edge];
+                float weight = graph.values[start_edge];
+                std::cout << "CPU DEBUG: First edge: 0 -> " << neighbor << " (weight: " << weight << ")" << std::endl;
+            }
+        }
+
         for (uint32_t edge_idx = start_edge; edge_idx < end_edge; edge_idx++) {
             uint32_t neighbor = graph.column_indices[edge_idx];
             float edge_weight = graph.values[edge_idx];

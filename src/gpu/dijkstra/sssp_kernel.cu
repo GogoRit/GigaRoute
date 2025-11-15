@@ -38,14 +38,29 @@ __global__ void sssp_kernel(
     // Get the node this thread will process
     // Note: Shared memory caching removed - overhead from __syncthreads() was worse than benefit
     uint32_t current_node = d_worklist[tid];
-    
+
+    // DEBUG: Print source node processing
+    if (current_node == 0 && tid == 0) {
+        printf("GPU DEBUG: Processing source node 0, distance: %f\n", d_distances[0]);
+    }
+
     // Get current distance to this node
     float current_distance = d_distances[current_node];
-    
+
     // Get the range of edges for this node using CSR format
     // OPTIMIZATION: Cache row pointers in registers for better access
     uint32_t edge_start = d_graph.d_row_pointers[current_node];
     uint32_t edge_end = d_graph.d_row_pointers[current_node + 1];
+
+    // DEBUG: Print source node edges
+    if (current_node == 0 && tid == 0) {
+        printf("GPU DEBUG: Source node edges: %u to %u\n", edge_start, edge_end);
+        if (edge_end > edge_start) {
+            uint32_t neighbor = d_graph.d_column_indices[edge_start];
+            float weight = d_graph.d_values[edge_start];
+            printf("GPU DEBUG: First edge: 0 -> %u (weight: %f)\n", neighbor, weight);
+        }
+    }
     
     // Process all outgoing edges from current_node
     // OPTIMIZATION: Process edges with better memory coalescing
@@ -57,13 +72,11 @@ __global__ void sssp_kernel(
         // Calculate new potential distance to neighbor
         float new_distance = current_distance + edge_weight;
 
-        // DEBUG: Try simple non-atomic update to test if atomic is the issue
-        // Read current neighbor distance
-        float old_distance = d_distances[neighbor];
+        // Try to update neighbor's distance atomically
+        float old_distance = atomicMinFloat(&d_distances[neighbor], new_distance);
 
-        // Only update if we improve the distance (non-atomic for testing)
+        // If we successfully improved the distance, add neighbor to new worklist
         if (new_distance < old_distance) {
-            d_distances[neighbor] = new_distance;
             // Add neighbor to new worklist for next iteration
             uint32_t pos = atomicAdd(d_new_worklist_size, 1);
             d_new_worklist[pos] = neighbor;
