@@ -67,15 +67,14 @@ __global__ void sssp_kernel(
             // If we successfully improved the distance, add neighbor to new worklist
             if (new_distance < old_distance) {
                 // OPTIMIZATION: Deduplication - check if already in worklist
-                // Use atomic exchange: if flag is 0, set to 1 and get 0 back (success)
-                // If flag is already 1, get 1 back (already in worklist, skip)
-                uint8_t old_flag = atomicExch(&d_worklist_flags[neighbor], 1);
-                if (old_flag == 0) {
-                    // Successfully set flag, node not in worklist yet - add it
+                // Use atomicCAS: if flag is 0, set to 1 (0 -> 1)
+                uint32_t expected = 0;
+                if (atomicCAS(&d_worklist_flags[neighbor], expected, 1) == 0) {
+                    // Successfully set flag from 0 to 1, node not in worklist yet - add it
                     uint32_t pos = atomicAdd(d_new_worklist_size, 1);
                     d_new_worklist[pos] = neighbor;
                 }
-                // If old_flag was 1, node is already in worklist - skip
+                // If flag was already 1, node is already in worklist - skip
             }
         }
     }
