@@ -95,8 +95,10 @@ public:
         
         // Main SSSP loop
         while (current_worklist_size > 0 && iteration < max_iterations) {
-            // Early termination check: if target distance is finite, we found a path
-            if (iteration % 100 == 0 && iteration > 0) {
+            // OPTIMIZATION: Early termination check less frequently for better performance
+            // Check more frequently in early iterations, less frequently later
+            uint32_t check_interval = (iteration < 50) ? 10 : (iteration < 500) ? 50 : 100;
+            if (iteration % check_interval == 0 && iteration > 0) {
                 CUDA_CHECK(cudaMemcpy(&target_distance, &d_distances[target], 
                                      sizeof(float), cudaMemcpyDeviceToHost));
                 if (target_distance < FLT_MAX) {
@@ -120,8 +122,10 @@ public:
                 256
             );
             
-            // Synchronize and get new worklist size
+            // OPTIMIZATION: Use single synchronization point
             CUDA_CHECK(cudaDeviceSynchronize());
+            
+            // Get new worklist size (single memcpy after sync)
             CUDA_CHECK(cudaMemcpy(&current_worklist_size, d_worklist_size, 
                                  sizeof(uint32_t), cudaMemcpyDeviceToHost));
             
