@@ -72,6 +72,15 @@ int main(int argc, char* argv[]) {
         std::cout << "Using custom delta: " << delta << std::endl;
     }
     
+    // Enable debug mode if requested (5th or 6th argument)
+    if (argc >= 6) {
+        std::string debug_arg = argv[5];
+        if (debug_arg == "--debug" || debug_arg == "-d") {
+            delta_stepping.setDebugMode(true);
+            std::cout << "Debug mode enabled" << std::endl;
+        }
+    }
+    
     // Test cases
     std::vector<std::pair<uint32_t, uint32_t>> test_cases;
     

@@ -55,15 +55,21 @@ __global__ void delta_stepping_light_kernel(
         uint32_t neighbor = d_graph.d_column_indices[edge_idx];
         float edge_weight = d_graph.d_values[edge_idx];
         
-        // Simplified: Process ALL edges (no light/heavy distinction for now)
-        float new_distance = current_distance + edge_weight;
-        
-        // Try to update neighbor's distance atomically
-        float old_distance = atomicMinFloat(&d_distances[neighbor], new_distance);
-        
-        // If we updated the distance, signal that we made changes
-        if (new_distance < old_distance) {
-            atomicExch(d_updated_flag, 1);
+        // CRITICAL: Only process LIGHT edges (weight <= delta) in this kernel
+        if (edge_weight <= delta) {
+            float new_distance = current_distance + edge_weight;
+            
+            // OPTIMIZATION: Pre-check distance before atomic
+            float current_neighbor_distance = d_distances[neighbor];
+            if (new_distance < current_neighbor_distance) {
+                // Try to update neighbor's distance atomically
+                float old_distance = atomicMinFloat(&d_distances[neighbor], new_distance);
+                
+                // If we updated the distance, signal that we made changes
+                if (new_distance < old_distance) {
+                    atomicExch(d_updated_flag, 1);
+                }
+            }
         }
     }
 }
@@ -103,10 +109,14 @@ __global__ void delta_stepping_heavy_kernel(
         if (edge_weight > delta) {
             float new_distance = current_distance + edge_weight;
             
-            float old_distance = atomicMinFloat(&d_distances[neighbor], new_distance);
-            
-            if (new_distance < old_distance) {
-                atomicExch(d_updated_flag, 1);
+            // OPTIMIZATION: Pre-check distance before atomic
+            float current_neighbor_distance = d_distances[neighbor];
+            if (new_distance < current_neighbor_distance) {
+                float old_distance = atomicMinFloat(&d_distances[neighbor], new_distance);
+                
+                if (new_distance < old_distance) {
+                    atomicExch(d_updated_flag, 1);
+                }
             }
         }
     }

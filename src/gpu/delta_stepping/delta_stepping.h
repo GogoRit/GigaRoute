@@ -11,6 +11,7 @@ struct DeltaSteppingConfig {
     uint32_t max_iterations;        // Maximum iterations before timeout
     uint32_t convergence_check_interval; // Check convergence every N iterations
     bool enable_early_termination;  // Stop when target is reached
+    bool debug_mode;                // Enable verbose debug output
 };
 
 // GPU Delta-stepping implementation
@@ -40,6 +41,7 @@ public:
     void setDelta(float delta) { config.delta = delta; }
     void setMaxIterations(uint32_t max_iter) { config.max_iterations = max_iter; }
     void enableEarlyTermination(bool enable) { config.enable_early_termination = enable; }
+    void setDebugMode(bool enable) { config.debug_mode = enable; }
     
     // Main algorithm
     float findShortestPath(uint32_t source, uint32_t target);
@@ -57,7 +59,7 @@ private:
     // Internal methods
     bool initializeGPUMemory();
     void freeGPUMemory();
-    uint32_t calculateOptimalDelta(const GPUGraph& graph);
+    float calculateOptimalDelta(const GPUGraph& graph);
     void resetDistances(uint32_t source);
     uint32_t findNextNonEmptyBucket();
 };
