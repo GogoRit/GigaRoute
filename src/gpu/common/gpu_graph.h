@@ -2,7 +2,7 @@
 #define GPU_GRAPH_H
 
 #include <cuda_runtime.h>
-#include "../common/graph_parser.h"
+#include "../../common/graph_parser.h"
 #include <vector>
 #include <cstdint>
 
