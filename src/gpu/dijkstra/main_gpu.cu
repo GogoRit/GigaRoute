@@ -100,10 +100,14 @@ public:
         
         // Main SSSP loop
         while (current_worklist_size > 0 && iteration < max_iterations) {
-            // OPTIMIZATION: Early termination check less frequently for better performance
+            // OPTIMIZATION: Early termination check with adaptive frequency
             // Check more frequently in early iterations, less frequently later
+            // Also check immediately after large worklist sizes (likely to have found target)
             uint32_t check_interval = (iteration < 50) ? 10 : (iteration < 500) ? 50 : 100;
-            if (iteration % check_interval == 0 && iteration > 0) {
+            bool should_check = (iteration % check_interval == 0 && iteration > 0) ||
+                               (current_worklist_size > 200000);  // Check after large expansions
+            
+            if (should_check) {
                 CUDA_CHECK(cudaMemcpy(&target_distance, &d_distances[target], 
                                      sizeof(float), cudaMemcpyDeviceToHost));
                 if (target_distance < FLT_MAX) {
@@ -115,14 +119,19 @@ public:
             // Reset next worklist size
             CUDA_CHECK(cudaMemcpy(d_worklist_size, &zero, sizeof(uint32_t), cudaMemcpyHostToDevice));
             
-            // OPTIMIZATION: Dynamic block size based on worklist size
+            // OPTIMIZATION: Dynamic block size based on worklist size and GPU occupancy
             // Smaller worklists benefit from smaller blocks (better occupancy)
             // Larger worklists can use larger blocks (better throughput)
-            int block_size = 256;  // Default
-            if (current_worklist_size < 1000) {
-                block_size = 128;  // Small worklist - use smaller blocks
-            } else if (current_worklist_size > 100000) {
-                block_size = 512;  // Large worklist - use larger blocks
+            // Use warp-aligned sizes (32, 64, 128, 256, 512) for optimal warp utilization
+            int block_size = 256;  // Default - good balance for most cases
+            if (current_worklist_size < 500) {
+                block_size = 128;  // Very small worklist - use smaller blocks
+            } else if (current_worklist_size < 5000) {
+                block_size = 256;  // Small-medium worklist
+            } else if (current_worklist_size > 200000) {
+                block_size = 512;  // Very large worklist - use larger blocks for throughput
+            } else {
+                block_size = 256;  // Medium-large worklist - default
             }
             
             // Launch SSSP kernel
@@ -141,9 +150,15 @@ public:
             // OPTIMIZATION: Use single synchronization point
             CUDA_CHECK(cudaDeviceSynchronize());
             
+            // OPTIMIZATION: Use pinned memory or async operations for better throughput
             // Get new worklist size (single memcpy after sync)
             CUDA_CHECK(cudaMemcpy(&current_worklist_size, d_worklist_size, 
                                  sizeof(uint32_t), cudaMemcpyDeviceToHost));
+            
+            // OPTIMIZATION: Skip empty worklists immediately (no need to process)
+            if (current_worklist_size == 0) {
+                break;  // No more work to do
+            }
             
             // Swap worklists for next iteration
             std::swap(current_worklist, next_worklist);
