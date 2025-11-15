@@ -21,8 +21,37 @@ echo ""
 echo "=========================================="
 echo ""
 
-GRAPH_FILE="../nyc_graph.bin"
-BUILD_DIR="build/bin"
+# Find graph file (try multiple locations)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+GRAPH_FILE=""
+
+# Try different possible locations
+for path in "$SCRIPT_DIR/nyc_graph.bin" "$SCRIPT_DIR/../nyc_graph.bin" "$SCRIPT_DIR/build/nyc_graph.bin" "$SCRIPT_DIR/../build/nyc_graph.bin"; do
+    if [ -f "$path" ]; then
+        GRAPH_FILE="$path"
+        break
+    fi
+done
+
+if [ -z "$GRAPH_FILE" ]; then
+    echo "Error: Could not find nyc_graph.bin"
+    echo "Searched in:"
+    echo "  $SCRIPT_DIR/nyc_graph.bin"
+    echo "  $SCRIPT_DIR/../nyc_graph.bin"
+    echo "  $SCRIPT_DIR/build/nyc_graph.bin"
+    echo "  $SCRIPT_DIR/../build/nyc_graph.bin"
+    exit 1
+fi
+
+echo "Using graph file: $GRAPH_FILE"
+echo ""
+
+BUILD_DIR="$SCRIPT_DIR/build/bin"
+
+if [ ! -d "$BUILD_DIR" ]; then
+    echo "Error: Build directory not found: $BUILD_DIR"
+    exit 1
+fi
 
 cd "$BUILD_DIR" || exit 1
 
