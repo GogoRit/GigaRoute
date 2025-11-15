@@ -56,7 +56,6 @@ __global__ void sssp_kernel(
     // OPTIMIZATION: Cache row pointers in registers for better access
     uint32_t edge_start = d_graph.d_row_pointers[current_node];
     uint32_t edge_end = d_graph.d_row_pointers[current_node + 1];
-    uint32_t num_edges = edge_end - edge_start;
     
     // Process all outgoing edges from current_node
     // OPTIMIZATION: Unroll small loops and optimize memory access pattern
