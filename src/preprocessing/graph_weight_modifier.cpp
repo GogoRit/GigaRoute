@@ -149,7 +149,7 @@ int main(int argc, char* argv[]) {
     
     // Create modified weights
     std::cout << "\nApplying weight modifications..." << std::endl;
-    std::vector<double> modified_weights = graph.values;
+    std::vector<double> modified_weights(graph.values.begin(), graph.values.end());
     
     // Random number generator
     std::random_device rd;
