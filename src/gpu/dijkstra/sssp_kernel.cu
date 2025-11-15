@@ -56,26 +56,17 @@ __global__ void sssp_kernel(
         
         // Calculate new potential distance to neighbor
         float new_distance = current_distance + edge_weight;
-        
-        // OPTIMIZATION: Pre-check distance before expensive atomic operation
-        // Read current distance first (non-atomic, may be stale but safe for comparison)
-        // This avoids ~50% of atomic operations on average
-        float current_neighbor_distance = d_distances[neighbor];
-        
-        // Only perform atomic update if we might improve the distance
-        // This avoids expensive atomic operations when update won't help
-        if (new_distance < current_neighbor_distance) {
-            // OPTIMIZATION: Use warp-level reduction before atomic when possible
-            // For nodes updated by multiple threads in same warp, reduce contention
-            // Try to update neighbor's distance atomically
-            float old_distance = atomicMinFloat(&d_distances[neighbor], new_distance);
-            
-            // If we successfully improved the distance, add neighbor to new worklist
-            if (new_distance < old_distance) {
-                // Add neighbor to new worklist for next iteration
-                uint32_t pos = atomicAdd(d_new_worklist_size, 1);
-                d_new_worklist[pos] = neighbor;
-            }
+
+        // Try to update neighbor's distance atomically (no pre-check for correctness)
+        // The atomic operation will handle all cases correctly, even with potential
+        // race conditions from relaxed memory consistency
+        float old_distance = atomicMinFloat(&d_distances[neighbor], new_distance);
+
+        // If we successfully improved the distance, add neighbor to new worklist
+        if (new_distance < old_distance) {
+            // Add neighbor to new worklist for next iteration
+            uint32_t pos = atomicAdd(d_new_worklist_size, 1);
+            d_new_worklist[pos] = neighbor;
         }
     }
 }
