@@ -182,11 +182,15 @@ float GPUDeltaStepping::findShortestPath(uint32_t source, uint32_t target) {
             }
         }
         
-        while (bucket_updated && bucket_iterations < 50) {
+        // CRITICAL FIX: Process light edges until convergence
+        // We need to ensure ALL light edges from ALL nodes in current bucket are processed
+        while (bucket_updated && bucket_iterations < 100) {  // Increased limit for convergence
             uint32_t zero = 0;
             CUDA_CHECK(cudaMemcpy(d_updated_flag, &zero, sizeof(uint32_t), cudaMemcpyHostToDevice));
             
             // Process LIGHT edges for current bucket
+            // CRITICAL: This processes nodes that are CURRENTLY in current_bucket
+            // Nodes that move to other buckets will be processed in those buckets
             launch_delta_stepping_light_kernel(
                 gpu_graph,
                 d_distances,
@@ -198,10 +202,6 @@ float GPUDeltaStepping::findShortestPath(uint32_t source, uint32_t target) {
                 256
             );
             
-            // CRITICAL FIX: Don't update bucket assignments during light edge processing
-            // This prevents nodes from moving out of current bucket prematurely
-            // We'll update buckets after all light edges are processed
-            
             // Synchronize to ensure light edge processing completes
             CUDA_CHECK(cudaDeviceSynchronize());
             
@@ -210,26 +210,32 @@ float GPUDeltaStepping::findShortestPath(uint32_t source, uint32_t target) {
             CUDA_CHECK(cudaMemcpy(&updated, d_updated_flag, sizeof(uint32_t), cudaMemcpyDeviceToHost));
             
             if (updated) {
-                // Update bucket assignments only after checking for updates
-                // This ensures nodes stay in current bucket during processing
+                // CRITICAL: Update bucket assignments AFTER processing light edges
+                // This allows nodes to move to correct buckets based on new distances
                 launch_bucket_update_kernel(d_distances, d_buckets, config.delta, max_nodes, 256);
                 CUDA_CHECK(cudaDeviceSynchronize());
                 
-                // Only recount if needed for debug
-                if (config.debug_mode) {
-                    CUDA_CHECK(cudaMemset(d_bucket_sizes, 0, num_buckets * sizeof(uint32_t)));
-                    launch_count_bucket_sizes(d_buckets, d_bucket_sizes, max_nodes, num_buckets, 256);
-                    CUDA_CHECK(cudaDeviceSynchronize());
-                    
-                    uint32_t new_bucket_size = 0;
-                    if (current_bucket < num_buckets) {
-                        CUDA_CHECK(cudaMemcpy(&new_bucket_size, &d_bucket_sizes[current_bucket], 
-                                             sizeof(uint32_t), cudaMemcpyDeviceToHost));
-                    }
-                    nodes_in_bucket = new_bucket_size;
+                // Check if there are still nodes in current bucket after update
+                CUDA_CHECK(cudaMemset(d_bucket_sizes, 0, num_buckets * sizeof(uint32_t)));
+                launch_count_bucket_sizes(d_buckets, d_bucket_sizes, max_nodes, num_buckets, 256);
+                CUDA_CHECK(cudaDeviceSynchronize());
+                
+                uint32_t remaining_in_bucket = 0;
+                if (current_bucket < num_buckets) {
+                    CUDA_CHECK(cudaMemcpy(&remaining_in_bucket, &d_bucket_sizes[current_bucket], 
+                                         sizeof(uint32_t), cudaMemcpyDeviceToHost));
                 }
-                bucket_updated = true;  // Continue if updates were made
+                
+                // CRITICAL: Continue only if there are still nodes in current bucket
+                // If all nodes moved to other buckets, we've converged for this bucket
+                // Those nodes will be processed in their new buckets
+                bucket_updated = (remaining_in_bucket > 0);
+                
+                if (config.debug_mode) {
+                    nodes_in_bucket = remaining_in_bucket;
+                }
             } else {
+                // No updates made - convergence reached for current bucket
                 bucket_updated = false;
             }
             
