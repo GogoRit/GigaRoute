@@ -17,6 +17,7 @@ extern "C" {
         uint32_t* d_new_worklist,
         uint32_t num_current_nodes,
         uint32_t* d_new_worklist_size,
+        uint8_t* d_worklist_flags,
         float delta,
         int block_size);
     
@@ -34,6 +35,7 @@ private:
     uint32_t* d_worklist_1;
     uint32_t* d_worklist_2;
     uint32_t* d_worklist_size;
+    uint8_t* d_worklist_flags;  // Flag array for deduplication
     uint32_t max_nodes;
     bool is_initialized;
 
@@ -52,6 +54,7 @@ public:
         CUDA_CHECK(cudaMalloc(&d_worklist_1, max_nodes * sizeof(uint32_t)));
         CUDA_CHECK(cudaMalloc(&d_worklist_2, max_nodes * sizeof(uint32_t)));
         CUDA_CHECK(cudaMalloc(&d_worklist_size, sizeof(uint32_t)));
+        CUDA_CHECK(cudaMalloc(&d_worklist_flags, max_nodes * sizeof(uint8_t)));
         
         is_initialized = true;
         std::cout << "GPU Dijkstra initialized for " << max_nodes << " nodes" << std::endl;
@@ -62,6 +65,7 @@ public:
         if (d_worklist_1) cudaFree(d_worklist_1);
         if (d_worklist_2) cudaFree(d_worklist_2);
         if (d_worklist_size) cudaFree(d_worklist_size);
+        if (d_worklist_flags) cudaFree(d_worklist_flags);
     }
     
     float findShortestPath(uint32_t source, uint32_t target) {
@@ -107,8 +111,9 @@ public:
                     break;
                 }
             }
-            // Reset next worklist size
+            // Reset next worklist size and clear flags for deduplication
             CUDA_CHECK(cudaMemcpy(d_worklist_size, &zero, sizeof(uint32_t), cudaMemcpyHostToDevice));
+            CUDA_CHECK(cudaMemset(d_worklist_flags, 0, max_nodes * sizeof(uint8_t)));
             
             // Launch SSSP kernel
             launch_sssp_kernel(
@@ -118,6 +123,7 @@ public:
                 next_worklist,
                 current_worklist_size,
                 d_worklist_size,
+                d_worklist_flags,
                 delta,
                 256
             );

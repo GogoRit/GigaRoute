@@ -24,6 +24,7 @@ __global__ void sssp_kernel(
     uint32_t* d_new_worklist,
     const uint32_t num_current_nodes,
     uint32_t* d_new_worklist_size,
+    uint8_t* d_worklist_flags,
     const float delta)
 {
     // Calculate global thread ID
@@ -65,11 +66,16 @@ __global__ void sssp_kernel(
             
             // If we successfully improved the distance, add neighbor to new worklist
             if (new_distance < old_distance) {
-                // Atomically get position in new worklist
-                uint32_t pos = atomicAdd(d_new_worklist_size, 1);
-                
-                // Add neighbor to new worklist for next iteration
-                d_new_worklist[pos] = neighbor;
+                // OPTIMIZATION: Deduplication - check if already in worklist
+                // Use atomic exchange: if flag is 0, set to 1 and get 0 back (success)
+                // If flag is already 1, get 1 back (already in worklist, skip)
+                uint8_t old_flag = atomicExch(&d_worklist_flags[neighbor], 1);
+                if (old_flag == 0) {
+                    // Successfully set flag, node not in worklist yet - add it
+                    uint32_t pos = atomicAdd(d_new_worklist_size, 1);
+                    d_new_worklist[pos] = neighbor;
+                }
+                // If old_flag was 1, node is already in worklist - skip
             }
         }
     }
@@ -98,6 +104,7 @@ void launch_sssp_kernel(
     uint32_t* d_new_worklist,
     uint32_t num_current_nodes,
     uint32_t* d_new_worklist_size,
+    uint8_t* d_worklist_flags,
     float delta,
     int block_size = 256)
 {
@@ -112,6 +119,7 @@ void launch_sssp_kernel(
         d_new_worklist,
         num_current_nodes,
         d_new_worklist_size,
+        d_worklist_flags,
         delta
     );
     
