@@ -86,6 +86,16 @@ else()
     message(WARNING "Osmium library not found. Skipping graph_converter build.")
 endif()
 
+# Graph weight modifier (post-processing tool, no osmium required)
+add_executable(graph_weight_modifier 
+    src/preprocessing/graph_weight_modifier.cpp
+    src/common/graph_parser.cpp
+)
+
+target_link_libraries(graph_weight_modifier PRIVATE
+    Threads::Threads
+)
+
 # CPU implementation
 add_executable(cpu_dijkstra 
     src/cpu/main_cpu.cpp
