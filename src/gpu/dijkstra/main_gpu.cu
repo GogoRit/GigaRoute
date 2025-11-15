@@ -54,6 +54,7 @@ public:
         CUDA_CHECK(cudaMalloc(&d_worklist_1, max_nodes * sizeof(uint32_t)));
         CUDA_CHECK(cudaMalloc(&d_worklist_2, max_nodes * sizeof(uint32_t)));
         CUDA_CHECK(cudaMalloc(&d_worklist_size, sizeof(uint32_t)));
+        // Allocate but don't use flags (deduplication overhead was worse than duplicates)
         CUDA_CHECK(cudaMalloc(&d_worklist_flags, max_nodes * sizeof(uint32_t)));
         
         is_initialized = true;
@@ -111,9 +112,8 @@ public:
                     break;
                 }
             }
-            // Reset next worklist size and clear flags for deduplication
+            // Reset next worklist size
             CUDA_CHECK(cudaMemcpy(d_worklist_size, &zero, sizeof(uint32_t), cudaMemcpyHostToDevice));
-            CUDA_CHECK(cudaMemset(d_worklist_flags, 0, max_nodes * sizeof(uint32_t)));
             
             // Launch SSSP kernel
             launch_sssp_kernel(
@@ -123,7 +123,7 @@ public:
                 next_worklist,
                 current_worklist_size,
                 d_worklist_size,
-                d_worklist_flags,
+                d_worklist_flags,  // Keep parameter for compatibility, but not used
                 delta,
                 256
             );
