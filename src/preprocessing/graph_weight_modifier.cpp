@@ -5,7 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iomanip>
-#include "graph_parser.h"
+#include "../common/graph_parser.h"
 
 /**
  * Graph Weight Modifier - Post-processing tool
