@@ -39,11 +39,6 @@ __global__ void sssp_kernel(
     // Note: Shared memory caching removed - overhead from __syncthreads() was worse than benefit
     uint32_t current_node = d_worklist[tid];
 
-    // DEBUG: Print source node processing
-    if (current_node == 0 && tid == 0) {
-        printf("GPU DEBUG: Processing source node 0, distance: %f\n", d_distances[0]);
-    }
-
     // Get current distance to this node
     float current_distance = d_distances[current_node];
 
@@ -51,16 +46,6 @@ __global__ void sssp_kernel(
     // OPTIMIZATION: Cache row pointers in registers for better access
     uint32_t edge_start = d_graph.d_row_pointers[current_node];
     uint32_t edge_end = d_graph.d_row_pointers[current_node + 1];
-
-    // DEBUG: Print source node edges
-    if (current_node == 0 && tid == 0) {
-        printf("GPU DEBUG: Source node edges: %u to %u\n", edge_start, edge_end);
-        if (edge_end > edge_start) {
-            uint32_t neighbor = d_graph.d_column_indices[edge_start];
-            float weight = d_graph.d_values[edge_start];
-            printf("GPU DEBUG: First edge: 0 -> %u (weight: %f)\n", neighbor, weight);
-        }
-    }
     
     // Process all outgoing edges from current_node
     // OPTIMIZATION: Process edges with better memory coalescing
