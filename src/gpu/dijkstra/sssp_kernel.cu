@@ -57,13 +57,13 @@ __global__ void sssp_kernel(
         // Calculate new potential distance to neighbor
         float new_distance = current_distance + edge_weight;
 
-        // Try to update neighbor's distance atomically (no pre-check for correctness)
-        // The atomic operation will handle all cases correctly, even with potential
-        // race conditions from relaxed memory consistency
-        float old_distance = atomicMinFloat(&d_distances[neighbor], new_distance);
+        // DEBUG: Try simple non-atomic update to test if atomic is the issue
+        // Read current neighbor distance
+        float old_distance = d_distances[neighbor];
 
-        // If we successfully improved the distance, add neighbor to new worklist
+        // Only update if we improve the distance (non-atomic for testing)
         if (new_distance < old_distance) {
+            d_distances[neighbor] = new_distance;
             // Add neighbor to new worklist for next iteration
             uint32_t pos = atomicAdd(d_new_worklist_size, 1);
             d_new_worklist[pos] = neighbor;
