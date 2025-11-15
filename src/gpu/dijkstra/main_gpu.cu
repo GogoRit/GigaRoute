@@ -92,10 +92,15 @@ public:
         
         int iteration = 0;
         const int max_iterations = 10000; // Increased safety limit
-        
+
+        // Convergence detection variables
+        const int convergence_window = 50; // Check for stability over 50 iterations
+        float last_target_distance = FLT_MAX;
+        int stable_iterations = 0;
+
         // Check if target is reachable initially
         float target_distance;
-        CUDA_CHECK(cudaMemcpy(&target_distance, &d_distances[target], 
+        CUDA_CHECK(cudaMemcpy(&target_distance, &d_distances[target],
                              sizeof(float), cudaMemcpyDeviceToHost));
         
         // Main SSSP loop
@@ -111,11 +116,18 @@ public:
                 CUDA_CHECK(cudaMemcpy(&target_distance, &d_distances[target],
                                      sizeof(float), cudaMemcpyDeviceToHost));
                 if (target_distance < FLT_MAX) {
-                    // Only print when early termination is actually enabled
-                    // std::cout << "Target reached at iteration " << iteration
-                    //          << " with distance " << target_distance << std::endl;
-                    // DISABLE early termination to match CPU behavior (CPU stops at target)
-                    // break;
+                    // Check for convergence: if target distance hasn't changed for convergence_window iterations
+                    if (target_distance == last_target_distance) {
+                        stable_iterations++;
+                        if (stable_iterations >= convergence_window) {
+                            std::cout << "Converged: Target distance stable for " << convergence_window
+                                     << " iterations at " << target_distance << std::endl;
+                            break;
+                        }
+                    } else {
+                        stable_iterations = 0;
+                        last_target_distance = target_distance;
+                    }
                 }
             }
             // Reset next worklist size
