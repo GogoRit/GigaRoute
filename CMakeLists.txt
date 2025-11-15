@@ -64,6 +64,24 @@ if(OSMIUM_INCLUDE_DIR)
         /opt/homebrew/lib/liblz4.dylib
         /opt/homebrew/opt/expat/lib/libexpat.dylib
     )
+    
+    # Variable-weight graph converter for delta-stepping testing
+    add_executable(graph_converter_variable_weights src/preprocessing/graph_converter_variable_weights.cpp)
+    
+    target_include_directories(graph_converter_variable_weights PRIVATE 
+        ${OSMIUM_INCLUDE_DIR}
+        /opt/homebrew/include
+        /opt/homebrew/Cellar/libosmium/2.22.0/include
+        /opt/homebrew/opt/expat/include
+    )
+    
+    target_link_libraries(graph_converter_variable_weights PRIVATE 
+        Threads::Threads
+        ZLIB::ZLIB
+        BZip2::BZip2
+        /opt/homebrew/lib/liblz4.dylib
+        /opt/homebrew/opt/expat/lib/libexpat.dylib
+    )
 else()
     message(WARNING "Osmium library not found. Skipping graph_converter build.")
 endif()
