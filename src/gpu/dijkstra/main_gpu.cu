@@ -108,12 +108,13 @@ public:
                                (current_worklist_size > 200000);  // Check after large expansions
             
             if (should_check) {
-                CUDA_CHECK(cudaMemcpy(&target_distance, &d_distances[target], 
+                CUDA_CHECK(cudaMemcpy(&target_distance, &d_distances[target],
                                      sizeof(float), cudaMemcpyDeviceToHost));
                 if (target_distance < FLT_MAX) {
-                    std::cout << "Target reached at iteration " << iteration 
-                              << " with distance " << target_distance << std::endl;
-                    break;
+                    std::cout << "Target reached at iteration " << iteration
+                             << " with distance " << target_distance << std::endl;
+                    // DISABLE early termination to match CPU behavior (CPU stops at target)
+                    // break;
                 }
             }
             // Reset next worklist size
