@@ -115,6 +115,16 @@ public:
             // Reset next worklist size
             CUDA_CHECK(cudaMemcpy(d_worklist_size, &zero, sizeof(uint32_t), cudaMemcpyHostToDevice));
             
+            // OPTIMIZATION: Dynamic block size based on worklist size
+            // Smaller worklists benefit from smaller blocks (better occupancy)
+            // Larger worklists can use larger blocks (better throughput)
+            int block_size = 256;  // Default
+            if (current_worklist_size < 1000) {
+                block_size = 128;  // Small worklist - use smaller blocks
+            } else if (current_worklist_size > 100000) {
+                block_size = 512;  // Large worklist - use larger blocks
+            }
+            
             // Launch SSSP kernel
             launch_sssp_kernel(
                 gpu_graph,
@@ -125,7 +135,7 @@ public:
                 d_worklist_size,
                 d_worklist_flags,  // Keep parameter for compatibility, but not used
                 delta,
-                256
+                block_size
             );
             
             // OPTIMIZATION: Use single synchronization point
