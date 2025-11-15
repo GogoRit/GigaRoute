@@ -94,7 +94,7 @@ public:
         const int max_iterations = 10000; // Increased safety limit
 
         // Convergence detection variables
-        const int convergence_window = 50; // Check for stability over 50 iterations
+        const int convergence_window = 200; // Check for stability over 200 iterations
         float last_target_distance = FLT_MAX;
         int stable_iterations = 0;
 
